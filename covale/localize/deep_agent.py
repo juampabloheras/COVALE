@@ -2,14 +2,12 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
-from deepagents import create_deep_agent
-from dotenv import load_dotenv
-
 from covale.localize.atlas_expression import (
     Expression,
     LOCALIZATION_PROMPT,
     LocalizationError,
 )
+from covale.localize.openai_client import ProviderError
 
 
 class DeepAgent(Protocol):
@@ -17,13 +15,26 @@ class DeepAgent(Protocol):
 
 
 def create_agent(model: str = "gpt-6-astra") -> DeepAgent:
+    try:
+        from deepagents import create_deep_agent
+        from dotenv import load_dotenv
+        from openai import OpenAIError
+    except ImportError as error:
+        raise ProviderError(
+            "Deep Agents support requires the 'agents' extra: "
+            "pip install 'covale[agents]'"
+        ) from error
+
     load_dotenv()
     provider_model = model if ":" in model else f"openai:{model}"
-    return create_deep_agent(
-        model=provider_model,
-        tools=[],
-        system_prompt=LOCALIZATION_PROMPT.read_text(encoding="utf-8"),
-    )
+    try:
+        return create_deep_agent(
+            model=provider_model,
+            tools=[],
+            system_prompt=LOCALIZATION_PROMPT.read_text(encoding="utf-8"),
+        )
+    except (OpenAIError, RuntimeError) as error:
+        raise ProviderError(f"Could not initialize Deep Agent: {error}") from error
 
 
 def read_agent_response(result: Mapping[str, Any]) -> Expression:
@@ -74,14 +85,25 @@ def build_expression(
     model: str = "gpt-6-astra",
 ) -> Expression:
     agent = agent or create_agent(model)
-    result = agent.invoke(
-        {
-            "messages": json.dumps(
-                {
-                    "anatomical_description": text,
-                    "atlas_registry": dict(registry),
-                }
-            )
-        }
-    )
+    try:
+        from openai import OpenAIError
+    except ImportError as error:
+        raise ProviderError(
+            "Deep Agents support requires the 'agents' extra: "
+            "pip install 'covale[agents]'"
+        ) from error
+
+    try:
+        result = agent.invoke(
+            {
+                "messages": json.dumps(
+                    {
+                        "anatomical_description": text,
+                        "atlas_registry": dict(registry),
+                    }
+                )
+            }
+        )
+    except (OpenAIError, RuntimeError) as error:
+        raise ProviderError(f"Deep Agent request failed: {error}") from error
     return read_agent_response(result)

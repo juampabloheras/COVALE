@@ -8,12 +8,14 @@ annotated JSONL file. Each non-empty input line must contain `reference` and
 uv run python benchmark/run.py \
   examples/pairs.jsonl \
   benchmark/results/llm.jsonl \
-  --method llm
+  --method llm \
+  --concurrency 8
 ```
 
 Available methods are `llm`, `deep_agent`, and `similarity`. Use `--model` to
-override `gpt-6-astra`, `--registry` to select an atlas registry, and
-`--overwrite` to replace an existing output.
+override `gpt-6-astra`, `--registry` to select an atlas registry,
+`--concurrency` for bounded ordered execution, `--summary` for a custom
+summary path, and `--overwrite` to replace existing output.
 
 Successful rows receive:
 
@@ -35,3 +37,7 @@ Expected row, localization, and provider failures are written with
 timing and count statistics, including separate provider setup time, then
 exits non-zero if any rows failed. The selected OpenAI client or Deep Agent is
 created once and reused for every row.
+
+The default sidecar path is `<output>.summary.json`. It records SHA-256 hashes
+for inputs, outputs, registry, and prompt; package/Python versions; Git commit;
+atlas metadata; counts; concurrency; and timing.

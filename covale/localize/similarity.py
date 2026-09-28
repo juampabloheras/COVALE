@@ -5,6 +5,7 @@ from covale.localize.openai_client import (
     create_client,
     request_json,
 )
+from covale.models import SimilarityResponse
 
 SIMILARITY_PROMPT = Path(__file__).parent / "prompts" / "similarity.txt"
 
@@ -26,9 +27,4 @@ def compare(
             "candidate": candidate,
         },
     )
-    score = result.get("score")
-    if not isinstance(score, int | float) or isinstance(score, bool):
-        raise ValueError("Similarity response must contain a numeric score.")
-    if not 0 <= score <= 1:
-        raise ValueError("Similarity score must be between 0 and 1.")
-    return float(score)
+    return SimilarityResponse.model_validate(result).score

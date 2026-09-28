@@ -20,6 +20,16 @@ uv sync
 uv run pytest
 ```
 
+The core install contains NumPy, NiBabel, and YAML support. Install only the
+provider integrations needed by an experiment:
+
+```bash
+uv sync --extra openai   # Direct OpenAI localization and similarity
+uv sync --extra agents   # Deep Agents localization
+uv sync --extra rl       # TRL integration
+uv sync --extra all      # Every optional integration
+```
+
 Copy `.env.example` to `.env` and add a consumer OpenAI API key:
 
 ```bash
@@ -119,13 +129,16 @@ wall-clock runtime:
 uv run python benchmark/run.py \
   examples/pairs.jsonl \
   benchmark/results/llm.jsonl \
-  --method llm
+  --method llm \
+  --concurrency 8
 ```
 
 The runner supports `llm`, `deep_agent`, and `similarity`, records expected
 errors per row without stopping the experiment, and prints aggregate timing
-statistics. See [benchmark/README.md](benchmark/README.md) for the output
-schema and command options.
+statistics. It also writes a `.summary.json` provenance sidecar containing
+input/output/registry/prompt hashes, versions, Git revision, atlas metadata,
+and timing. See [benchmark/README.md](benchmark/README.md) for the output
+format and command options.
 
 ## Compare systems
 
@@ -146,6 +159,7 @@ signatures, scores = compare_systems(
     },
     references=reference_descriptions,
     n_samples=10_000,
+    test="bootstrap",
 )
 ```
 
@@ -154,6 +168,9 @@ uses only those cached scores, so increasing `n_samples` does not make
 additional LLM calls. `scores` contains system means and p-values;
 `signatures` contains deltas, confidence intervals, significance flags, and
 reproducibility settings for each comparison.
+
+Set `test="approximate_randomization"` for a paired randomization test instead
+of paired bootstrap. Pair scores remain cached for either test.
 
 ## Config file
 
@@ -166,9 +183,11 @@ metrics:
       provider: openai
       model_name: gpt-6-astra
       registry_path: ../atlas_registry/registry.json
+      concurrency: 4
 
 output:
-  mode: default
+  mode: detailed
+  errors: record
 
 cache: true
 ```
@@ -183,9 +202,36 @@ results = covale_evaluator(refs=refs, hyps=hyps)
 ```
 
 Output modes are `default`, `per_sample`, and `detailed`. Detailed output
-contains the mean Dice score, standard deviation, and per-sample scores. See
+contains the mean Dice score, standard deviation, per-sample scores,
+localization expressions and timings, expression complexity, resolved
+fraction, and categorized failures. `errors: record` keeps unresolved pairs
+in detailed output; the default `errors: raise` stops explicitly. See
 [`examples/config.yaml`](examples/config.yaml) for a complete example.
 
+## RL rewards
+
+Create a cached TRL-compatible reward function:
+
+```python
+from covale import make_reward_fn
+
+reward_fn = make_reward_fn(
+    method="llm",
+    model="gpt-6-astra",
+    registry_path="atlas_registry/registry.json",
+    concurrency=4,
+)
+
+rewards = reward_fn(
+    completions=generated_descriptions,
+    ground_truth=reference_descriptions,
+)
+```
+
+The callable accepts plain strings or conversational message lists and
+returns one Dice reward per completion. It reuses the evaluator cache and
+provider. `benchmark.rewards.benchmark_reward` reports reward latency and
+mean reward without requiring TRL at runtime.
 
 ## Adding a new atlas primitive
 

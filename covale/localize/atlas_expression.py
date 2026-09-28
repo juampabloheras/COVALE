@@ -1,9 +1,11 @@
-import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from covale.masks import AtlasMask, difference, intersection, load_mask, union
+from covale.models import AtlasRegistry, validate_expression
 
 DEFAULT_REGISTRY = (
     Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
@@ -20,15 +22,13 @@ class LocalizationError(ValueError):
 def load_registry(registry_path: str | Path) -> dict[str, Any]:
     path = Path(registry_path)
     try:
-        registry = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        registry = AtlasRegistry.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValidationError) as error:
         raise LocalizationError(f"Could not read atlas registry: {path}") from error
 
-    if not isinstance(registry, dict) or not isinstance(
-        registry.get("regions"), dict
-    ):
-        raise LocalizationError("Atlas registry must contain a regions object.")
-    return registry
+    return registry.model_dump()
 
 
 def execute_expression(
@@ -37,6 +37,10 @@ def execute_expression(
 ) -> AtlasMask:
     path = Path(registry_path)
     registry = load_registry(path)
+    try:
+        expression = validate_expression(expression).model_dump()
+    except ValidationError as error:
+        raise LocalizationError(f"Invalid mask expression: {error}") from error
     regions = registry["regions"]
     registry_root = path.resolve().parent
 
@@ -116,6 +120,37 @@ def execute_expression(
     return interpret(expression)
 
 
+def expression_stats(expression: Expression) -> dict[str, int]:
+    def count(node: object, depth: int) -> tuple[int, int, int]:
+        if not isinstance(node, Mapping):
+            return 0, 0, depth
+        operator = node.get("op")
+        if operator == "region":
+            return 1, 0, depth
+        arguments = node.get("args")
+        if not isinstance(arguments, list):
+            return 0, 0, depth
+
+        regions = 0
+        operations = 1
+        max_depth = depth
+        for argument in arguments:
+            child_regions, child_operations, child_depth = count(
+                argument, depth + 1
+            )
+            regions += child_regions
+            operations += child_operations
+            max_depth = max(max_depth, child_depth)
+        return regions, operations, max_depth
+
+    regions, operations, depth = count(expression, 1)
+    return {
+        "regions": regions,
+        "operations": operations,
+        "depth": depth,
+    }
+
+
 def localize_with_expression(
     text: str,
     registry_path: str | Path = DEFAULT_REGISTRY,
@@ -144,7 +179,12 @@ def localize_with_expression(
 
     if not isinstance(expression, Mapping):
         raise LocalizationError("Localization must return a mask expression.")
-    expression = dict(expression)
+    try:
+        expression = validate_expression(expression).model_dump()
+    except ValidationError as error:
+        raise LocalizationError(
+            f"Localization returned an invalid expression: {error}"
+        ) from error
     return expression, execute_expression(expression, registry_path)
 
 

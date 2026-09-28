@@ -86,12 +86,12 @@ def test_unknown_region(registry: Path) -> None:
 
 
 def test_unknown_operator(registry: Path) -> None:
-    with pytest.raises(LocalizationError, match="Unknown mask operator"):
+    with pytest.raises(LocalizationError, match="Invalid mask expression"):
         execute_expression({"op": "eval", "args": []}, registry)
 
 
 def test_malformed_expression(registry: Path) -> None:
-    with pytest.raises(LocalizationError, match="requires an args list"):
+    with pytest.raises(LocalizationError, match="Invalid mask expression"):
         execute_expression({"op": "union"}, registry)
 
 
@@ -242,7 +242,7 @@ def test_llm_localization_rejects_non_json(registry: Path) -> None:
 def test_similarity_rejects_out_of_range_score() -> None:
     client = FakeClient('{"score": 1.5}')
 
-    with pytest.raises(ValueError, match="between 0 and 1"):
+    with pytest.raises(ValueError, match="less than or equal to 1"):
         covale("reference", "candidate", method="similarity", client=client)
 
 
@@ -257,8 +257,7 @@ def test_deep_agent_model_uses_openai_provider(
         return sentinel
 
     monkeypatch.setattr(
-        deep_agent,
-        "create_deep_agent",
+        "deepagents.create_deep_agent",
         fake_create_deep_agent,
     )
 

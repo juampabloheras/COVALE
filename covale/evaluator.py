@@ -1,16 +1,21 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal
 
 import numpy as np
 import yaml
+from pydantic import ValidationError
 
-from covale.evaluate import DEFAULT_MODEL, CovaleMethod, covale as score_covale
+from covale.evaluate import DEFAULT_MODEL, CovaleMethod, evaluate as evaluate_pair
 from covale.localize import DEFAULT_REGISTRY
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
+from covale.models import EvaluatorConfig
 
 OutputMode = Literal["default", "per_sample", "detailed"]
+ErrorMode = Literal["raise", "record"]
 
 
 class COVALE:
@@ -25,6 +30,8 @@ class COVALE:
         per_sample: bool = False,
         output_mode: OutputMode | None = None,
         cache: bool = True,
+        concurrency: int = 1,
+        errors: ErrorMode = "raise",
         client: OpenAIClient | None = None,
         agent: DeepAgent | None = None,
     ) -> None:
@@ -38,18 +45,27 @@ class COVALE:
             raise ValueError(f"Unknown output mode: {output_mode}")
         if per_sample and output_mode not in {None, "per_sample"}:
             raise ValueError("per_sample=True conflicts with output_mode.")
+        if concurrency < 1:
+            raise ValueError("concurrency must be at least 1.")
+        if errors not in {"raise", "record"}:
+            raise ValueError(f"Unknown error mode: {errors}")
+        selected_output = output_mode or (
+            "per_sample" if per_sample else "default"
+        )
+        if errors == "record" and selected_output != "detailed":
+            raise ValueError("errors='record' requires output_mode='detailed'.")
 
         self.method = method
         self.model = model
         self.registry_path = registry_path
         self.provider = provider
-        self.output_mode = output_mode or (
-            "per_sample" if per_sample else "default"
-        )
+        self.output_mode = selected_output
         self.cache = cache
+        self.concurrency = concurrency
+        self.errors = errors
         self.client = client
         self.agent = agent
-        self.scores: dict[tuple[str, str, str, str], float] = {}
+        self.results: dict[tuple[str, str, str, str], dict[str, Any]] = {}
 
     @classmethod
     def from_config(
@@ -61,144 +77,152 @@ class COVALE:
     ) -> "COVALE":
         config_path = Path(path)
         try:
-            config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            config_data = yaml.safe_load(
+                config_path.read_text(encoding="utf-8")
+            )
+            config = EvaluatorConfig.model_validate(config_data)
         except OSError as error:
             raise ValueError(f"Could not read config: {config_path}") from error
-        except yaml.YAMLError as error:
-            raise ValueError(f"Invalid YAML config: {config_path}") from error
-
-        if not isinstance(config, Mapping):
-            raise ValueError("Config must be a YAML mapping.")
-        unknown_sections = set(config) - {"metrics", "output", "cache"}
-        if unknown_sections:
+        except (yaml.YAMLError, ValidationError) as error:
             raise ValueError(
-                f"Unknown config sections: {sorted(unknown_sections)}"
-            )
+                f"Invalid YAML config {config_path}: {error}"
+            ) from error
 
-        metrics = config.get("metrics")
-        if not isinstance(metrics, list) or len(metrics) != 1:
-            raise ValueError("Config metrics must contain exactly one dice entry.")
-
-        metric_entry = metrics[0]
-        if metric_entry == "dice":
-            settings: Mapping[str, object] = {}
-        elif (
-            isinstance(metric_entry, Mapping)
-            and set(metric_entry) == {"dice"}
-            and isinstance(metric_entry["dice"], Mapping)
-        ):
-            settings = metric_entry["dice"]
-        else:
-            raise ValueError("Config supports only the dice metric.")
-
-        allowed_settings = {
-            "method",
-            "provider",
-            "model_name",
-            "registry_path",
-        }
-        unknown_settings = set(settings) - allowed_settings
-        if unknown_settings:
-            raise ValueError(
-                f"Unknown dice settings: {sorted(unknown_settings)}"
-            )
-
-        method = settings.get("method", "llm")
-        provider = settings.get("provider", "openai")
-        model = settings.get("model_name", DEFAULT_MODEL)
-        registry = settings.get("registry_path", str(DEFAULT_REGISTRY))
-        if not isinstance(method, str):
-            raise ValueError("dice.method must be a string.")
-        if not isinstance(provider, str):
-            raise ValueError("dice.provider must be a string.")
-        if not isinstance(model, str):
-            raise ValueError("dice.model_name must be a string.")
-        if not isinstance(registry, str):
-            raise ValueError("dice.registry_path must be a string.")
-        if method not in {"llm", "deep_agent", "similarity"}:
-            raise ValueError(f"Unknown COVALE method: {method}")
-        if provider != "openai":
-            raise ValueError("COVALE currently supports only provider='openai'.")
-        method = cast(CovaleMethod, method)
-        provider = cast(Literal["openai"], provider)
-
-        registry_path = Path(registry)
+        settings = config.dice_settings()
+        registry_path = Path(settings.registry_path or str(DEFAULT_REGISTRY))
         if not registry_path.is_absolute():
             registry_path = (config_path.parent / registry_path).resolve()
 
-        output = config.get("output", {})
-        if not isinstance(output, Mapping):
-            raise ValueError("output must be a mapping.")
-        unknown_output = set(output) - {"mode"}
-        if unknown_output:
-            raise ValueError(f"Unknown output settings: {sorted(unknown_output)}")
-        output_mode = output.get("mode", "default")
-        if not isinstance(output_mode, str):
-            raise ValueError("output.mode must be a string.")
-        if output_mode not in {"default", "per_sample", "detailed"}:
-            raise ValueError(f"Unknown output mode: {output_mode}")
-        output_mode = cast(OutputMode, output_mode)
-
-        cache = config.get("cache", True)
-        if not isinstance(cache, bool):
-            raise ValueError("cache must be true or false.")
-
         return cls(
             metrics=["dice"],
-            method=method,
-            model=model,
+            method=settings.method,
+            model=settings.model_name,
             registry_path=registry_path,
-            provider=provider,
-            output_mode=output_mode,
-            cache=cache,
+            provider=settings.provider,
+            output_mode=config.output.mode,
+            cache=config.cache,
+            concurrency=settings.concurrency or config.concurrency,
+            errors=config.output.errors,
             client=client,
             agent=agent,
         )
 
-    def score(self, reference: str, candidate: str) -> float:
-        key = (self.method, self.model, reference, candidate)
-        if self.cache and key in self.scores:
-            return self.scores[key]
-
+    def prepare_provider(self) -> None:
         if self.method in {"llm", "similarity"} and self.client is None:
             self.client = create_client()
         if self.method == "deep_agent" and self.agent is None:
             self.agent = create_agent(self.model)
 
-        score = score_covale(
-            reference,
-            candidate,
-            self.registry_path,
-            method=self.method,
-            model=self.model,
-            client=self.client,
-            agent=self.agent,
-        )
+    def evaluate_pair(
+        self,
+        reference: str,
+        candidate: str,
+    ) -> dict[str, Any]:
+        key = (self.method, self.model, reference, candidate)
+        if self.cache and key in self.results:
+            return self.results[key]
+
+        self.prepare_provider()
+        try:
+            result = evaluate_pair(
+                reference,
+                candidate,
+                self.registry_path,
+                method=self.method,
+                model=self.model,
+                client=self.client,
+                agent=self.agent,
+            )
+        except (ValueError, RuntimeError, TimeoutError) as error:
+            if self.errors == "raise":
+                raise
+            result = {
+                "reference": reference,
+                "candidate": candidate,
+                "method": self.method,
+                "score": None,
+                "diagnostics": {
+                    "resolved": False,
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                },
+            }
         if self.cache:
-            self.scores[key] = score
-        return score
+            self.results[key] = result
+        return result
+
+    def score(self, reference: str, candidate: str) -> float:
+        result = self.evaluate_pair(reference, candidate)
+        score = result.get("score")
+        if not isinstance(score, int | float) or isinstance(score, bool):
+            raise ValueError("COVALE pair did not produce a Dice score.")
+        return float(score)
 
     def __call__(
         self,
         refs: Sequence[str],
         hyps: Sequence[str],
-    ) -> dict[str, float | list[float]]:
+    ) -> dict[str, Any]:
         if len(refs) != len(hyps):
             raise ValueError("refs and hyps must have the same length.")
         if not refs:
             raise ValueError("refs and hyps must not be empty.")
 
-        scores = [
-            self.score(reference, candidate)
-            for reference, candidate in zip(refs, hyps, strict=True)
-        ]
+        pairs = list(zip(refs, hyps, strict=True))
+        self.prepare_provider()
+        if self.cache:
+            work = list(dict.fromkeys(pairs))
+        else:
+            work = pairs
+
+        if self.concurrency == 1:
+            work_results = [
+                self.evaluate_pair(reference, candidate)
+                for reference, candidate in work
+            ]
+        else:
+            with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+                work_results = list(
+                    executor.map(
+                        lambda pair: self.evaluate_pair(*pair),
+                        work,
+                    )
+                )
+
+        if self.cache:
+            by_pair = dict(zip(work, work_results, strict=True))
+            results = [by_pair[pair] for pair in pairs]
+        else:
+            results = work_results
+
+        scores = [result.get("score") for result in results]
         if self.output_mode == "per_sample":
             return {"dice": scores}
-        mean = float(np.mean(scores))
+        resolved_scores = [
+            float(score)
+            for score in scores
+            if isinstance(score, int | float) and not isinstance(score, bool)
+        ]
+        if not resolved_scores:
+            raise ValueError("No COVALE pairs were resolved.")
+        mean = float(np.mean(resolved_scores))
         if self.output_mode == "detailed":
+            failures = [
+                result["diagnostics"]
+                for result in results
+                if not result["diagnostics"]["resolved"]
+            ]
+            failure_counts = Counter(
+                failure["error_type"] for failure in failures
+            )
             return {
                 "dice": mean,
-                "dice_std": float(np.std(scores)),
+                "dice_std": float(np.std(resolved_scores)),
                 "dice_per_sample": scores,
+                "resolved_fraction": len(resolved_scores) / len(results),
+                "resolved_count": len(resolved_scores),
+                "unresolved_count": len(failures),
+                "failure_counts": dict(failure_counts),
+                "pairs": results,
             }
         return {"dice": mean}

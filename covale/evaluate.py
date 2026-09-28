@@ -1,10 +1,12 @@
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal
 
 from covale.localize import (
     DEFAULT_REGISTRY,
     ExpressionBuilder,
+    expression_stats,
     localize_with_expression,
 )
 from covale.localize.deep_agent import (
@@ -32,21 +34,30 @@ def evaluate(
     client: OpenAIClient | None = None,
     agent: DeepAgent | None = None,
 ) -> dict[str, Any]:
+    started = perf_counter()
     if expression_builder is not None and method is not None:
         raise ValueError("Pass either expression_builder or method, not both.")
 
     builder = expression_builder
     if method == "similarity":
+        score_started = perf_counter()
+        score = compare(
+            reference,
+            candidate,
+            client=client,
+            model=model,
+        )
+        elapsed = perf_counter() - score_started
         return {
             "reference": reference,
             "candidate": candidate,
             "method": method,
-            "score": compare(
-                reference,
-                candidate,
-                client=client,
-                model=model,
-            ),
+            "score": score,
+            "diagnostics": {
+                "resolved": True,
+                "language_seconds": elapsed,
+                "total_seconds": perf_counter() - started,
+            },
         }
 
     if method == "llm":
@@ -82,19 +93,35 @@ def evaluate(
     elif method is not None:
         raise ValueError(f"Unknown COVALE method: {method}")
 
+    reference_started = perf_counter()
     reference_expression, reference_mask = localize_with_expression(
         reference, registry_path, builder
     )
+    reference_seconds = perf_counter() - reference_started
+    candidate_started = perf_counter()
     candidate_expression, candidate_mask = localize_with_expression(
         candidate, registry_path, builder
     )
+    candidate_seconds = perf_counter() - candidate_started
+    dice_started = perf_counter()
+    score = dice(reference_mask.data, candidate_mask.data)
+    dice_seconds = perf_counter() - dice_started
     return {
         "reference": reference,
         "candidate": candidate,
         "method": method or "custom",
         "reference_expression": reference_expression,
         "candidate_expression": candidate_expression,
-        "score": dice(reference_mask.data, candidate_mask.data),
+        "score": score,
+        "diagnostics": {
+            "resolved": True,
+            "reference_localization_seconds": reference_seconds,
+            "candidate_localization_seconds": candidate_seconds,
+            "dice_seconds": dice_seconds,
+            "total_seconds": perf_counter() - started,
+            "reference_expression": expression_stats(reference_expression),
+            "candidate_expression": expression_stats(candidate_expression),
+        },
     }
 
 

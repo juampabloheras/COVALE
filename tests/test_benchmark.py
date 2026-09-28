@@ -24,7 +24,14 @@ def test_annotate_jsonl_scores_every_row(
     input_path = tmp_path / "pairs.jsonl"
     output_path = tmp_path / "annotated.jsonl"
     write_pairs(input_path)
-    monkeypatch.setattr(run, "covale", lambda *args, **kwargs: 0.75)
+    monkeypatch.setattr(
+        run,
+        "evaluate",
+        lambda *args, **kwargs: {
+            "score": 0.75,
+            "diagnostics": {"resolved": True},
+        },
+    )
 
     summary = run.annotate_jsonl(
         input_path,
@@ -42,6 +49,9 @@ def test_annotate_jsonl_scores_every_row(
     assert summary["succeeded"] == 2
     assert summary["failed"] == 0
     assert summary["total_seconds"] >= summary["mean_row_seconds"]
+    assert Path(summary["summary"]).is_file()
+    assert len(summary["input_sha256"]) == 64
+    assert len(summary["output_sha256"]) == 64
 
 
 def test_annotate_jsonl_records_error_and_continues(
@@ -53,14 +63,14 @@ def test_annotate_jsonl_records_error_and_continues(
     write_pairs(input_path)
     calls = 0
 
-    def score(*args, **kwargs) -> float:
+    def score(*args, **kwargs) -> dict:
         nonlocal calls
         calls += 1
         if calls == 1:
             raise ValueError("unresolved")
-        return 1.0
+        return {"score": 1.0, "diagnostics": {"resolved": True}}
 
-    monkeypatch.setattr(run, "covale", score)
+    monkeypatch.setattr(run, "evaluate", score)
 
     summary = run.annotate_jsonl(input_path, output_path, client=object())
 
@@ -87,7 +97,14 @@ def test_annotate_jsonl_records_malformed_json(
         + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(run, "covale", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr(
+        run,
+        "evaluate",
+        lambda *args, **kwargs: {
+            "score": 1.0,
+            "diagnostics": {"resolved": True},
+        },
+    )
 
     summary = run.annotate_jsonl(input_path, output_path, client=object())
 
@@ -95,6 +112,34 @@ def test_annotate_jsonl_records_malformed_json(
         json.loads(line)
         for line in output_path.read_text(encoding="utf-8").splitlines()
     ]
-    assert rows[0]["covale"]["error_type"] == "JSONDecodeError"
+    assert rows[0]["covale"]["error_type"] == "ValidationError"
     assert rows[1]["covale"]["score"] == 1.0
     assert summary["failed"] == 1
+
+
+def test_annotate_jsonl_runs_rows_concurrently(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from threading import Barrier
+
+    input_path = tmp_path / "pairs.jsonl"
+    output_path = tmp_path / "annotated.jsonl"
+    write_pairs(input_path)
+    barrier = Barrier(2)
+
+    def score(*args, **kwargs) -> dict:
+        barrier.wait(timeout=2)
+        return {"score": 1.0, "diagnostics": {"resolved": True}}
+
+    monkeypatch.setattr(run, "evaluate", score)
+
+    summary = run.annotate_jsonl(
+        input_path,
+        output_path,
+        concurrency=2,
+        client=object(),
+    )
+
+    assert summary["concurrency"] == 2
+    assert summary["succeeded"] == 2

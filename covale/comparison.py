@@ -1,10 +1,11 @@
 from collections.abc import Callable, Mapping, Sequence
 from numbers import Real
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
 Metric = Callable[[Sequence[str], Sequence[str]], object]
+SignificanceTest = Literal["bootstrap", "approximate_randomization"]
 
 
 def metric_value(result: object) -> float:
@@ -43,6 +44,7 @@ def compare_systems(
     *,
     significance_level: float = 0.05,
     random_seed: int | None = 0,
+    test: SignificanceTest = "bootstrap",
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, float]]]:
     if len(systems) < 2:
         raise ValueError("At least two systems are required.")
@@ -54,6 +56,8 @@ def compare_systems(
         raise ValueError("n_samples must be at least 1.")
     if not 0 < significance_level < 1:
         raise ValueError("significance_level must be between 0 and 1.")
+    if test not in {"bootstrap", "approximate_randomization"}:
+        raise ValueError(f"Unknown significance test: {test}")
 
     for name, outputs in systems.items():
         if len(outputs) != len(references):
@@ -95,20 +99,37 @@ def compare_systems(
                 cached[system_name][metric_name]
                 - cached[baseline_name][metric_name]
             )
-            bootstrap_deltas = np.empty(n_samples, dtype=float)
-            for sample in range(n_samples):
-                indices = rng.integers(0, len(references), len(references))
-                bootstrap_deltas[sample] = differences[indices].mean()
-
-            non_positive = (np.count_nonzero(bootstrap_deltas <= 0) + 1) / (
-                n_samples + 1
-            )
-            non_negative = (np.count_nonzero(bootstrap_deltas >= 0) + 1) / (
-                n_samples + 1
-            )
-            p_value = min(1.0, 2 * min(non_positive, non_negative))
-            lower, upper = np.percentile(bootstrap_deltas, confidence)
             delta = float(differences.mean())
+            if test == "bootstrap":
+                sampled_deltas = np.empty(n_samples, dtype=float)
+                for sample in range(n_samples):
+                    indices = rng.integers(
+                        0, len(references), len(references)
+                    )
+                    sampled_deltas[sample] = differences[indices].mean()
+
+                non_positive = (
+                    np.count_nonzero(sampled_deltas <= 0) + 1
+                ) / (n_samples + 1)
+                non_negative = (
+                    np.count_nonzero(sampled_deltas >= 0) + 1
+                ) / (n_samples + 1)
+                p_value = min(1.0, 2 * min(non_positive, non_negative))
+                lower, upper = np.percentile(sampled_deltas, confidence)
+                confidence_interval: list[float] | None = [
+                    float(lower),
+                    float(upper),
+                ]
+            else:
+                randomized = np.empty(n_samples, dtype=float)
+                for sample in range(n_samples):
+                    signs = rng.choice((-1.0, 1.0), size=len(references))
+                    randomized[sample] = (differences * signs).mean()
+                extreme = np.count_nonzero(
+                    np.abs(randomized) >= abs(delta)
+                )
+                p_value = (extreme + 1) / (n_samples + 1)
+                confidence_interval = None
 
             scores[system_name][f"{metric_name}_pvalue"] = p_value
             signatures.append(
@@ -117,9 +138,10 @@ def compare_systems(
                     "system": system_name,
                     "metric": metric_name,
                     "delta": delta,
-                    "confidence_interval": [float(lower), float(upper)],
+                    "confidence_interval": confidence_interval,
                     "p_value": p_value,
                     "significant": p_value < significance_level,
+                    "test": test,
                     "n_samples": n_samples,
                     "random_seed": random_seed,
                 }
