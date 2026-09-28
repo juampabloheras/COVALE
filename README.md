@@ -10,7 +10,26 @@ reference text -> localization -> atlas ROI --\
 candidate text -> localization -> atlas ROI --/
 ```
 
+## Features
 
+- Three localization strategies:
+  - `llm`: direct OpenAI atlas-expression generation
+  - `deep_agent`: tool-using localization with Deep Agents
+  - `similarity`: language-only OpenAI baseline without atlas masks
+- Affine-aware mask composition with `union`, `intersection`, and `difference`
+- Scalar, batch, callable evaluator, YAML config, and JSONL benchmark interfaces
+- Ordered bounded concurrency, pair-level caching, and reusable provider clients
+- Per-pair diagnostics, expression complexity, timing, and recorded failures
+- Paired bootstrap and approximate-randomization system comparisons
+- TRL-compatible reward functions and reward latency benchmarking
+- Pydantic runtime validation for configs, atlas registries, expressions, inputs,
+  and benchmark records
+- Provenance sidecars with content hashes, package versions, Git revision, atlas
+  metadata, and aggregate timing
+
+COVALE assumes that all atlas masks are already aligned in the same coordinate
+system. It validates mask shapes and affines but does not perform image,
+affine, or deformable registration.
 
 ## Install and test
 
@@ -85,6 +104,10 @@ The `llm` and `deep_agent` methods independently localize each description to
 an atlas expression and calculate Dice overlap. The `similarity` method is a
 language-only baseline and does not use the atlas registry.
 
+Atlas expressions are validated before execution and never passed to `eval()`
+or `exec()`. Unknown operators, regions, or registry fields are rejected
+explicitly.
+
 For a batch, use a JSON file containing an array of phrase pairs:
 
 ```json
@@ -139,6 +162,11 @@ statistics. It also writes a `.summary.json` provenance sidecar containing
 input/output/registry/prompt hashes, versions, Git revision, atlas metadata,
 and timing. See [benchmark/README.md](benchmark/README.md) for the output
 format and command options.
+
+Input and output order is preserved when `--concurrency` is greater than one.
+Each output row retains the original fields and adds a validated `covale`
+annotation with its status, score or error, method, model, line number,
+elapsed time, and diagnostics.
 
 ## Compare systems
 
@@ -208,6 +236,10 @@ fraction, and categorized failures. `errors: record` keeps unresolved pairs
 in detailed output; the default `errors: raise` stops explicitly. See
 [`examples/config.yaml`](examples/config.yaml) for a complete example.
 
+Repeated reference/candidate pairs are evaluated once when `cache: true`.
+Provider integrations are imported lazily, so the core package can be used
+without installing OpenAI, Deep Agents, or TRL.
+
 ## RL rewards
 
 Create a cached TRL-compatible reward function:
@@ -232,6 +264,18 @@ The callable accepts plain strings or conversational message lists and
 returns one Dice reward per completion. It reuses the evaluator cache and
 provider. `benchmark.rewards.benchmark_reward` reports reward latency and
 mean reward without requiring TRL at runtime.
+
+```python
+from benchmark.rewards import benchmark_reward
+
+timing = benchmark_reward(
+    reward_fn,
+    completions=generated_descriptions,
+    references=reference_descriptions,
+    repeats=3,
+)
+print(timing)
+```
 
 ## Adding a new atlas primitive
 
