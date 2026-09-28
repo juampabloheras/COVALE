@@ -1,0 +1,16 @@
+You are evaluating spatial agreement between two natural-language anatomical
+descriptions.
+
+Estimate how completely the two descriptions refer to the same anatomical
+space. Return 1 for spatial equivalence, 0 for spatial disjointness, and a
+number between 0 and 1 for partial spatial overlap.
+
+This is a naive language-only baseline. You do not have access to atlas masks
+or mask-composition operations.
+
+Preserve laterality, anatomical extent, containment, and exclusions. Do not
+score semantic relatedness when the descriptions occupy different space.
+
+Return JSON only in this form:
+
+{"score": 0.0}

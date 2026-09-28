@@ -1,20 +1,27 @@
 [project]
 name = "covale"
 version = "0.1.0"
-description = "Neuroimaging workflows with nibabel and the OpenAI API"
+description = "Compositional Open-Vocabulary Anatomical Localization Evaluation"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "deepagents>=0.7.19",
     "langchain-openai>=1.6.6",
     "nibabel>=5.4.2",
+    "numpy>=2.4.6",
     "openai>=3.20.0",
     "python-dotenv>=1.2.3",
+    "pyyaml>=6.0.3",
 ]
-
-[project.scripts]
-covale = "covale:main"
 
 [build-system]
 requires = ["uv_build>=0.11.26,<0.12.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.uv.build-backend]
+module-root = ""

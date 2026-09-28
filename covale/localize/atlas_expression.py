@@ -1,0 +1,156 @@
+import json
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any
+
+from covale.masks import AtlasMask, difference, intersection, load_mask, union
+
+DEFAULT_REGISTRY = (
+    Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
+)
+LOCALIZATION_PROMPT = Path(__file__).parent / "prompts" / "localize.txt"
+Expression = Mapping[str, Any]
+ExpressionBuilder = Callable[[str, Mapping[str, Any]], Expression]
+
+
+class LocalizationError(ValueError):
+    pass
+
+
+def load_registry(registry_path: str | Path) -> dict[str, Any]:
+    path = Path(registry_path)
+    try:
+        registry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise LocalizationError(f"Could not read atlas registry: {path}") from error
+
+    if not isinstance(registry, dict) or not isinstance(
+        registry.get("regions"), dict
+    ):
+        raise LocalizationError("Atlas registry must contain a regions object.")
+    return registry
+
+
+def execute_expression(
+    expression: Expression,
+    registry_path: str | Path = DEFAULT_REGISTRY,
+) -> AtlasMask:
+    path = Path(registry_path)
+    registry = load_registry(path)
+    regions = registry["regions"]
+    registry_root = path.resolve().parent
+
+    def resolve_region(name: str) -> AtlasMask:
+        canonical_name = name
+        if canonical_name not in regions:
+            requested_name = name.casefold()
+            canonical_name = next(
+                (
+                    region_name
+                    for region_name, entry in regions.items()
+                    if isinstance(entry, dict)
+                    and requested_name
+                    in {
+                        region_name.casefold(),
+                        *(
+                            alias.casefold()
+                            for alias in entry.get("aliases", [])
+                            if isinstance(alias, str)
+                        ),
+                    }
+                ),
+                "",
+            )
+
+        if not canonical_name:
+            raise LocalizationError(f"Unknown atlas region: {name}")
+
+        entry = regions[canonical_name]
+        if not isinstance(entry, dict):
+            raise LocalizationError(f"Malformed atlas region: {canonical_name}")
+
+        relative_path = entry.get("mask")
+        if not isinstance(relative_path, str) or not relative_path:
+            raise LocalizationError("Atlas region must define a mask path.")
+
+        mask_path = (registry_root / relative_path).resolve()
+        if not mask_path.is_relative_to(registry_root):
+            raise LocalizationError(
+                "Atlas mask path must remain inside atlas_registry."
+            )
+        if not mask_path.is_file():
+            raise LocalizationError(f"Atlas mask does not exist: {relative_path}")
+        return load_mask(mask_path)
+
+    def interpret(node: object) -> AtlasMask:
+        if not isinstance(node, dict) or not isinstance(node.get("op"), str):
+            raise LocalizationError("Mask expression must contain a string op.")
+
+        operator = node["op"]
+        if operator == "unresolved":
+            if set(node) != {"op"}:
+                raise LocalizationError("Malformed unresolved expression.")
+            raise LocalizationError("Anatomical description could not be localized.")
+
+        if operator == "region":
+            if set(node) != {"op", "name"} or not isinstance(
+                node.get("name"), str
+            ):
+                raise LocalizationError("Region expression requires a string name.")
+            return resolve_region(node["name"])
+
+        if operator not in {"union", "intersection", "difference"}:
+            raise LocalizationError(f"Unknown mask operator: {operator}")
+        if set(node) != {"op", "args"} or not isinstance(node.get("args"), list):
+            raise LocalizationError(f"{operator} expression requires an args list.")
+        if len(node["args"]) < 2:
+            raise LocalizationError(f"{operator} requires at least two arguments.")
+
+        masks = [interpret(argument) for argument in node["args"]]
+        if operator == "union":
+            return union(*masks)
+        if operator == "intersection":
+            return intersection(*masks)
+        return difference(masks[0], *masks[1:])
+
+    return interpret(expression)
+
+
+def localize_with_expression(
+    text: str,
+    registry_path: str | Path = DEFAULT_REGISTRY,
+    expression_builder: ExpressionBuilder | None = None,
+) -> tuple[Expression, AtlasMask]:
+    if not isinstance(text, str) or not text.strip():
+        raise LocalizationError("Anatomical description must be non-empty text.")
+
+    registry = load_registry(registry_path)
+    if expression_builder is None:
+        requested_name = text.strip().casefold()
+        expression: Expression = {"op": "unresolved"}
+        for name, entry in registry["regions"].items():
+            aliases = entry.get("aliases", []) if isinstance(entry, dict) else []
+            available_names = [
+                name,
+                *(alias for alias in aliases if isinstance(alias, str)),
+            ]
+            if requested_name in {
+                available_name.casefold() for available_name in available_names
+            }:
+                expression = {"op": "region", "name": name}
+                break
+    else:
+        expression = expression_builder(text, registry)
+
+    if not isinstance(expression, Mapping):
+        raise LocalizationError("Localization must return a mask expression.")
+    expression = dict(expression)
+    return expression, execute_expression(expression, registry_path)
+
+
+def localize(
+    text: str,
+    registry_path: str | Path = DEFAULT_REGISTRY,
+    expression_builder: ExpressionBuilder | None = None,
+) -> AtlasMask:
+    return localize_with_expression(text, registry_path, expression_builder)[1]

@@ -1,0 +1,11 @@
+metrics:
+  - dice:
+      method: llm
+      provider: openai
+      model_name: gpt-6-astra
+      registry_path: ../atlas_registry/registry.json
+
+output:
+  mode: default
+
+cache: true
