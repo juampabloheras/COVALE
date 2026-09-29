@@ -22,7 +22,7 @@ candidate text -> localization -> atlas ROI --/
 - [Compare systems](#compare-systems)
 - [Config file](#config-file)
 - [RL rewards](#rl-rewards)
-- [Adding a new atlas primitive](#adding-a-new-atlas-primitive)
+- [Atlas Registry v2](#atlas-registry-v2)
 - [License](#license)
 
 
@@ -249,10 +249,18 @@ timing = benchmark_reward(
 print(timing)
 ```
 
-## Adding a new atlas primitive
+## Atlas Registry v2
 
-See [atlas_registry/README.md](atlas_registry/README.md) to add atlas
-primitives.
+Registry v2 supports stable region IDs, synonyms and source labels,
+laterality-aware search, ontology metadata, binary masks, and labeled atlas
+volumes. Exact aliases resolve deterministically without an OpenAI call;
+ambiguous and compositional descriptions use a compact ranked candidate list.
+
+The repository includes a tiny synthetic registry that demonstrates the
+format. It is not a scientific atlas. See
+[atlas_registry/README.md](atlas_registry/README.md) for the full schema,
+stable-ID expressions, provenance requirements, and the
+`covale-migrate-registry` converter.
 
 ## License
 

@@ -26,6 +26,7 @@ from covale.models import (
     Pair,
     SuccessfulAnnotation,
 )
+from covale.registry.models import RegistryV2
 
 EXPECTED_ROW_ERRORS = (
     ValueError,
@@ -75,7 +76,11 @@ def annotate_jsonl(
     input_path = Path(input_path)
     output_path = Path(output_path)
     registry_path = Path(registry_path)
-    summary_path = Path(summary_path) if summary_path is not None else output_path.with_suffix(output_path.suffix + ".summary.json")
+    summary_path = (
+        Path(summary_path)
+        if summary_path is not None
+        else output_path.with_suffix(output_path.suffix + ".summary.json")
+    )
 
     if input_path.resolve() == output_path.resolve():
         raise ValueError("Input and output paths must be different.")
@@ -83,7 +88,10 @@ def annotate_jsonl(
         raise ValueError("concurrency must be at least 1.")
     for destination in (output_path, summary_path):
         if destination.exists() and not overwrite:
-            raise FileExistsError(f"Output already exists: {destination}. " "Pass --overwrite to replace it.")
+            raise FileExistsError(
+                f"Output already exists: {destination}. "
+                "Pass --overwrite to replace it."
+            )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,12 +180,28 @@ def annotate_jsonl(
     total_seconds = perf_counter() - started
 
     atlas: str | None = None
+    atlas_ids: list[str] = []
     space: str | None = None
+    registry_schema_version: int | None = None
     registry_hash: str | None = None
     if registry_path.is_file():
-        registry = AtlasRegistry.model_validate_json(registry_path.read_text(encoding="utf-8"))
-        atlas = registry.atlas
-        space = registry.space
+        registry_payload = json.loads(registry_path.read_text(encoding="utf-8"))
+        if (
+            isinstance(registry_payload, dict)
+            and registry_payload.get("schema_version") == 2
+        ):
+            registry_v2 = RegistryV2.model_validate(registry_payload)
+            atlas_ids = sorted(registry_v2.atlases)
+            if len(atlas_ids) == 1:
+                atlas = registry_v2.atlases[atlas_ids[0]].name
+            space = registry_v2.space.name
+            registry_schema_version = 2
+        else:
+            registry_v1 = AtlasRegistry.model_validate(registry_payload)
+            atlas = registry_v1.atlas
+            atlas_ids = [registry_v1.atlas]
+            space = registry_v1.space
+            registry_schema_version = 1
         registry_hash = file_sha256(registry_path)
 
     repository = Path(__file__).resolve().parent.parent
@@ -194,12 +218,18 @@ def annotate_jsonl(
             "model": model,
             "concurrency": concurrency,
             "atlas": atlas,
+            "atlas_ids": atlas_ids,
             "atlas_space": space,
             "registry": str(registry_path),
+            "registry_schema_version": registry_schema_version,
             "registry_sha256": registry_hash,
             "localization_prompt_sha256": text_sha256(LOCALIZATION_PROMPT),
-            "extraction_prompt_sha256": (text_sha256(EXTRACTION_PROMPT) if extract_findings else None),
-            "compatibility_prompt_sha256": (text_sha256(COMPATIBILITY_PROMPT) if extract_findings else None),
+            "extraction_prompt_sha256": (
+                text_sha256(EXTRACTION_PROMPT) if extract_findings else None
+            ),
+            "compatibility_prompt_sha256": (
+                text_sha256(COMPATIBILITY_PROMPT) if extract_findings else None
+            ),
             "extract_findings": extract_findings,
             "covale_version": version("covale"),
             "git_commit": git_commit(repository),
@@ -220,7 +250,9 @@ def annotate_jsonl(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Annotate JSONL phrase pairs with COVALE scores and timings.")
+    parser = argparse.ArgumentParser(
+        description="Annotate JSONL phrase pairs with COVALE scores and timings."
+    )
     parser.add_argument("input", type=Path, help="Input JSONL file.")
     parser.add_argument("output", type=Path, help="Annotated output JSONL file.")
     parser.add_argument(
