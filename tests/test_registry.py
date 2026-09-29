@@ -82,7 +82,46 @@ def registry_v2() -> dict[str, object]:
 def test_default_registry_is_packaged_with_covale() -> None:
     assert DEFAULT_REGISTRY.parent.name == "atlas_registry"
     assert DEFAULT_REGISTRY.parent.parent.name == "covale"
-    assert Registry.load(DEFAULT_REGISTRY).model.schema_version == 2
+    registry = Registry.load(DEFAULT_REGISTRY)
+    assert registry.model.schema_version == 2
+    assert registry.model.space.name == "MNI152"
+    assert len(registry.model.atlases) == 15
+    assert len(registry.model.regions) == 1016
+    assert all(
+        atlas.source_url and atlas.citation and atlas.license
+        for atlas in registry.model.atlases.values()
+    )
+    assert all(
+        (DEFAULT_REGISTRY.parent / atlas.volume).is_file()
+        for atlas in registry.model.atlases.values()
+    )
+
+    matches = registry.search("left thalamus", limit=5)
+    assert {match.region_id for match in matches if match.score == 1.0} >= {
+        "aparc-a2009s-aseg:10",
+        "nextbrain-left-right-merged:218",
+    }
+
+    combined = execute_expression(
+        {
+            "op": "union",
+            "args": [
+                {"op": "region", "id": "aparc-a2009s-aseg:10"},
+                {
+                    "op": "region",
+                    "id": "nextbrain-left-right-merged:218",
+                },
+            ],
+        }
+    )
+    assert combined.data.shape == (182, 218, 182)
+    assert combined.data.any()
+
+    resampling = json.loads(
+        (DEFAULT_REGISTRY.parent / "nextbrain_resampling.json").read_text()
+    )
+    assert len(resampling["excluded_region_ids"]) == 16
+    assert not set(resampling["excluded_region_ids"]) & registry.model.regions.keys()
 
 
 def test_loads_registry_v2_and_searches_synonyms(tmp_path: Path) -> None:

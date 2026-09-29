@@ -53,9 +53,14 @@ def test_annotate_jsonl_scores_every_row(
     assert len(summary["input_sha256"]) == 64
     assert len(summary["output_sha256"]) == 64
     assert summary["registry_schema_version"] == 2
-    assert summary["atlas_ids"] == ["example"]
-    assert summary["atlas"] == "Example labeled atlas"
-    assert summary["atlas_space"] == "example_atlas_space"
+    assert len(summary["atlas_ids"]) == 15
+    assert {
+        "aparc-a2009s-aseg",
+        "nextbrain-left-right-merged",
+        "wmparc",
+    } <= set(summary["atlas_ids"])
+    assert summary["atlas"] is None
+    assert summary["atlas_space"] == "MNI152"
 
 
 def test_annotate_jsonl_records_error_and_continues(

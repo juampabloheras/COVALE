@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "atlas_id": "nextbrain-left-right-merged",
+  "method": "nearest-neighbor",
+  "interpolation_order": 0,
+  "source": {
+    "name": "NextBrain_left_right_merged.nii.gz",
+    "sha256": "61380f23589c09e4195afec659e91828173b2845cb089610e4de68d6cb5ae2e8",
+    "shape": [
+      379,
+      468,
+      394
+    ],
+    "zooms": [
+      0.3993055522441864,
+      0.4000000059604645,
+      0.3994845449924469
+    ],
+    "affine": [
+      [
+        -0.3993055522441864,
+        0.0,
+        0.0,
+        76.30000305175781
+      ],
+      [
+        0.0,
+        0.4000000059604645,
+        0.0,
+        -110.30000305175781
+      ],
+      [
+        0.0,
+        0.0,
+        0.3994845449924469,
+        -71.29974365234375
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "label_count": 511
+  },
+  "output": {
+    "name": "nextbrain-left-right-merged.nii.gz",
+    "sha256": "71675564eb11e7ef4679634e350d961b1f0a7704df716bebcc53e250d0ed59af",
+    "shape": [
+      182,
+      218,
+      182
+    ],
+    "zooms": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "affine": [
+      [
+        -1.0,
+        0.0,
+        0.0,
+        90.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0,
+        -126.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0,
+        -72.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "label_count": 495
+  },
+  "excluded_labels": [
+    100,
+    160,
+    234,
+    284,
+    365,
+    409,
+    444,
+    506,
+    569,
+    572,
+    10100,
+    10209,
+    10430,
+    10444,
+    10506,
+    10510
+  ],
+  "excluded_region_ids": [
+    "nextbrain-left-right-merged:100",
+    "nextbrain-left-right-merged:160",
+    "nextbrain-left-right-merged:234",
+    "nextbrain-left-right-merged:284",
+    "nextbrain-left-right-merged:365",
+    "nextbrain-left-right-merged:409",
+    "nextbrain-left-right-merged:444",
+    "nextbrain-left-right-merged:506",
+    "nextbrain-left-right-merged:569",
+    "nextbrain-left-right-merged:572",
+    "nextbrain-left-right-merged:10100",
+    "nextbrain-left-right-merged:10209",
+    "nextbrain-left-right-merged:10430",
+    "nextbrain-left-right-merged:10444",
+    "nextbrain-left-right-merged:10506",
+    "nextbrain-left-right-merged:10510"
+  ]
+}

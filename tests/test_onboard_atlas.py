@@ -96,7 +96,10 @@ def test_onboards_directory_and_updates_registry(tmp_path: Path) -> None:
                 "laterality": "left",
                 "structure_type": "white_matter",
                 "is_abnormality": False,
-                "synonyms": ["left white matter of forebrain"],
+                "synonyms": [
+                    " left white matter of forebrain ",
+                    "LEFT WHITE MATTER OF FOREBRAIN",
+                ],
                 "confidence": 1.0,
                 "rationale": "Curated source metadata.",
             }

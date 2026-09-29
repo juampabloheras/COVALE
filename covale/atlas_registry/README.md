@@ -1,8 +1,9 @@
 # Atlas registry
 
 COVALE supports integer-labeled atlas volumes and one-file-per-region binary
-masks. The included atlas is synthetic and exists only to demonstrate the
-format; replace it before scientific use.
+masks. The bundled MNI152 registry contains 15 labeled volumes and 1,016
+stable region mappings spanning anatomical, hemispheric, and contextual
+atlases.
 
 ## Requirements
 
@@ -14,6 +15,26 @@ format; replace it before scientific use.
    than display names.
 4. Record atlas licenses, citations, versions, and source URLs before
    redistributing third-party assets.
+
+## Bundled atlases
+
+| Family | Volumes | Role |
+|---|---:|---|
+| FreeSurfer | 5 | Anatomical parcellations and segmentations |
+| COVALE FreeSurfer hierarchies | 4 | Hemisphere, anatomical, and contextual groupings |
+| NextBrain | 1 | Fine anatomical parcellation |
+| Digital 3D Brain MRI Arterial Territories Atlas | 2 | Vascular context |
+| COVALE midline, cistern, and tentorium masks | 3 | Anatomical context |
+
+All bundled volumes use the same `182 x 218 x 182`, 1 mm MNI152 grid.
+NextBrain was resampled from its native approximately 0.4 mm grid using
+nearest-neighbor interpolation. Sixteen labels absent after downsampling are
+not included in the registry. See
+[`nextbrain_resampling.json`](nextbrain_resampling.json) for source and output
+geometry, checksums, and excluded stable IDs.
+
+See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for licenses, citations,
+source URLs, and modification notices.
 
 ## Registry structure
 
