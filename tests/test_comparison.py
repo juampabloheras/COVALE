@@ -40,9 +40,7 @@ def test_covale_callable_can_return_per_sample_scores(monkeypatch) -> None:
     monkeypatch.setattr("covale.evaluator.core.create_client", object)
     evaluator = COVALE(method="similarity", per_sample=True)
 
-    assert evaluator(["a", "b"], ["c", "d"]) == {
-        "dice": [0.25, 0.25]
-    }
+    assert evaluator(["a", "b"], ["c", "d"]) == {"dice": [0.25, 0.25]}
 
 
 def test_covale_from_config(tmp_path, monkeypatch) -> None:
@@ -138,9 +136,7 @@ def test_compare_systems_supports_approximate_randomization() -> None:
             "baseline": ["x", "x", "x"],
             "improved": ["a", "b", "c"],
         },
-        metrics={
-            "dice": lambda hyps, refs: float(hyps[0] == refs[0])
-        },
+        metrics={"dice": lambda hyps, refs: float(hyps[0] == refs[0])},
         references=["a", "b", "c"],
         n_samples=500,
         random_seed=4,

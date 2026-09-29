@@ -13,9 +13,7 @@ def benchmark_reward(
     if repeats < 1:
         raise ValueError("repeats must be at least 1.")
     if len(completions) != len(references):
-        raise ValueError(
-            "References and completions must have the same length."
-        )
+        raise ValueError("References and completions must have the same length.")
 
     durations = []
     scores: list[float] = []
@@ -30,9 +28,5 @@ def benchmark_reward(
         "mean_reward": mean(scores) if scores else 0.0,
         "total_seconds": sum(durations),
         "mean_repeat_seconds": mean(durations),
-        "mean_example_seconds": (
-            sum(durations) / (len(completions) * repeats)
-            if completions
-            else 0.0
-        ),
+        "mean_example_seconds": (sum(durations) / (len(completions) * repeats) if completions else 0.0),
     }

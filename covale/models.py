@@ -50,11 +50,7 @@ class UnresolvedExpression(StrictModel):
 
 
 Expression = Annotated[
-    RegionExpression
-    | UnionExpression
-    | IntersectionExpression
-    | DifferenceExpression
-    | UnresolvedExpression,
+    RegionExpression | UnionExpression | IntersectionExpression | DifferenceExpression | UnresolvedExpression,
     Field(discriminator="op"),
 ]
 UnionExpression.model_rebuild()
@@ -137,13 +133,9 @@ class BenchmarkRecord(BaseModel):
     def check_source(self) -> "BenchmarkRecord":
         has_pair = self.reference is not None and self.candidate is not None
         if not has_pair and self.source is None:
-            raise ValueError(
-                "Benchmark record requires a phrase pair or source text."
-            )
+            raise ValueError("Benchmark record requires a phrase pair or source text.")
         if self.covale.status == "ok" and not has_pair:
-            raise ValueError(
-                "Successful benchmark record requires reference and candidate."
-            )
+            raise ValueError("Successful benchmark record requires reference and candidate.")
         return self
 
 

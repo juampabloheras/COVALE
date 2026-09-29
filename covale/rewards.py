@@ -13,9 +13,7 @@ def completion_text(completion: object) -> str:
         content = completion.get("content")
         if isinstance(content, str):
             return content
-    if isinstance(completion, Sequence) and not isinstance(
-        completion, (str, bytes)
-    ):
+    if isinstance(completion, Sequence) and not isinstance(completion, (str, bytes)):
         if not completion:
             raise ValueError("Conversational completion must not be empty.")
         return completion_text(completion[-1])
@@ -29,9 +27,7 @@ def make_reward_fn(
     **evaluator_options: Any,
 ) -> Callable[..., list[float]]:
     if evaluator is not None and evaluator_options:
-        raise ValueError(
-            "Pass an evaluator or evaluator options, not both."
-        )
+        raise ValueError("Pass an evaluator or evaluator options, not both.")
     evaluator = evaluator or COVALE(
         metrics=["dice"],
         **evaluator_options,
@@ -44,19 +40,13 @@ def make_reward_fn(
         references: Sequence[str] | str | None = None,
         **_: object,
     ) -> list[float]:
-        selected_references = (
-            ground_truth if ground_truth is not None else references
-        )
+        selected_references = ground_truth if ground_truth is not None else references
         if selected_references is None:
-            raise ValueError(
-                "Reward calls require ground_truth or references."
-            )
+            raise ValueError("Reward calls require ground_truth or references.")
         if isinstance(selected_references, str):
             selected_references = [selected_references] * len(completions)
         if len(selected_references) != len(completions):
-            raise ValueError(
-                "References and completions must have the same length."
-            )
+            raise ValueError("References and completions must have the same length.")
 
         scores = [
             evaluator.score(reference, completion_text(completion))

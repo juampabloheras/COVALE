@@ -20,10 +20,7 @@ def create_agent(model: str = "gpt-6-astra") -> DeepAgent:
         from dotenv import load_dotenv
         from openai import OpenAIError
     except ImportError as error:
-        raise ProviderError(
-            "Deep Agents is a core COVALE dependency. Reinstall COVALE to "
-            "restore the provider."
-        ) from error
+        raise ProviderError("Deep Agents is a core COVALE dependency. Reinstall COVALE to " "restore the provider.") from error
 
     load_dotenv()
     provider_model = model if ":" in model else f"openai:{model}"
@@ -47,33 +44,18 @@ def read_agent_response(result: Mapping[str, Any]) -> Expression:
         raise LocalizationError("Deep agent result did not contain messages.")
 
     message = messages[-1]
-    content = (
-        message.get("content")
-        if isinstance(message, Mapping)
-        else getattr(message, "content", None)
-    )
+    content = message.get("content") if isinstance(message, Mapping) else getattr(message, "content", None)
     if isinstance(content, list):
-        content = "".join(
-            block.get("text", "")
-            for block in content
-            if isinstance(block, Mapping)
-            and isinstance(block.get("text"), str)
-        )
+        content = "".join(block.get("text", "") for block in content if isinstance(block, Mapping) and isinstance(block.get("text"), str))
     if not isinstance(content, str):
         raise LocalizationError("Deep agent response did not contain text.")
 
     try:
         expression = json.loads(content)
     except json.JSONDecodeError as error:
-        raise LocalizationError(
-            "Deep agent response was not valid JSON."
-        ) from error
-    if not isinstance(expression, dict) or not isinstance(
-        expression.get("op"), str
-    ):
-        raise LocalizationError(
-            "Deep agent response must contain a JSON expression with an op."
-        )
+        raise LocalizationError("Deep agent response was not valid JSON.") from error
+    if not isinstance(expression, dict) or not isinstance(expression.get("op"), str):
+        raise LocalizationError("Deep agent response must contain a JSON expression with an op.")
     return expression
 
 
@@ -88,10 +70,7 @@ def build_expression(
     try:
         from openai import OpenAIError
     except ImportError as error:
-        raise ProviderError(
-            "Deep Agents is a core COVALE dependency. Reinstall COVALE to "
-            "restore the provider."
-        ) from error
+        raise ProviderError("Deep Agents is a core COVALE dependency. Reinstall COVALE to " "restore the provider.") from error
 
     try:
         result = agent.invoke(

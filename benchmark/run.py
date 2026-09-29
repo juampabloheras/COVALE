@@ -75,11 +75,7 @@ def annotate_jsonl(
     input_path = Path(input_path)
     output_path = Path(output_path)
     registry_path = Path(registry_path)
-    summary_path = (
-        Path(summary_path)
-        if summary_path is not None
-        else output_path.with_suffix(output_path.suffix + ".summary.json")
-    )
+    summary_path = Path(summary_path) if summary_path is not None else output_path.with_suffix(output_path.suffix + ".summary.json")
 
     if input_path.resolve() == output_path.resolve():
         raise ValueError("Input and output paths must be different.")
@@ -87,10 +83,7 @@ def annotate_jsonl(
         raise ValueError("concurrency must be at least 1.")
     for destination in (output_path, summary_path):
         if destination.exists() and not overwrite:
-            raise FileExistsError(
-                f"Output already exists: {destination}. "
-                "Pass --overwrite to replace it."
-            )
+            raise FileExistsError(f"Output already exists: {destination}. " "Pass --overwrite to replace it.")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,36 +126,32 @@ def annotate_jsonl(
                 {
                     **parsed,
                     "covale": SuccessfulAnnotation(
-                    status="ok",
-                    score=result["score"],
-                    elapsed_seconds=elapsed,
-                    method=method,
-                    model=model,
-                    line=line_number,
-                    diagnostics=result["diagnostics"],
-                ),
+                        status="ok",
+                        score=result["score"],
+                        elapsed_seconds=elapsed,
+                        method=method,
+                        model=model,
+                        line=line_number,
+                        diagnostics=result["diagnostics"],
+                    ),
                 }
             )
             return annotation.model_dump(mode="json"), elapsed, True
         except EXPECTED_ROW_ERRORS as error:
             elapsed = perf_counter() - row_started
-            original = (
-                parsed
-                if isinstance(parsed, dict)
-                else {"source": line}
-            )
+            original = parsed if isinstance(parsed, dict) else {"source": line}
             annotation = BenchmarkRecord.model_validate(
                 {
                     **original,
                     "covale": ErrorAnnotation(
-                    status="error",
-                    error_type=type(error).__name__,
-                    error=str(error),
-                    elapsed_seconds=elapsed,
-                    method=method,
-                    model=model,
-                    line=line_number,
-                ),
+                        status="error",
+                        error_type=type(error).__name__,
+                        error=str(error),
+                        elapsed_seconds=elapsed,
+                        method=method,
+                        model=model,
+                        line=line_number,
+                    ),
                 }
             )
             return annotation.model_dump(mode="json"), elapsed, False
@@ -186,49 +175,43 @@ def annotate_jsonl(
     space: str | None = None
     registry_hash: str | None = None
     if registry_path.is_file():
-        registry = AtlasRegistry.model_validate_json(
-            registry_path.read_text(encoding="utf-8")
-        )
+        registry = AtlasRegistry.model_validate_json(registry_path.read_text(encoding="utf-8"))
         atlas = registry.atlas
         space = registry.space
         registry_hash = file_sha256(registry_path)
 
     repository = Path(__file__).resolve().parent.parent
-    summary = BenchmarkSummary.model_validate({
-        "schema_version": "1.0",
-        "created_at": datetime.now(UTC).isoformat(),
-        "input": str(input_path),
-        "input_sha256": file_sha256(input_path),
-        "output": str(output_path),
-        "output_sha256": file_sha256(output_path),
-        "summary": str(summary_path),
-        "method": method,
-        "model": model,
-        "concurrency": concurrency,
-        "atlas": atlas,
-        "atlas_space": space,
-        "registry": str(registry_path),
-        "registry_sha256": registry_hash,
-        "localization_prompt_sha256": text_sha256(LOCALIZATION_PROMPT),
-        "extraction_prompt_sha256": (
-            text_sha256(EXTRACTION_PROMPT) if extract_findings else None
-        ),
-        "compatibility_prompt_sha256": (
-            text_sha256(COMPATIBILITY_PROMPT) if extract_findings else None
-        ),
-        "extract_findings": extract_findings,
-        "covale_version": version("covale"),
-        "git_commit": git_commit(repository),
-        "python_version": platform.python_version(),
-        "rows": len(annotated_rows),
-        "succeeded": succeeded,
-        "failed": failed,
-        "setup_seconds": setup_seconds,
-        "total_seconds": total_seconds,
-        "mean_row_seconds": (
-            sum(durations) / len(durations) if durations else 0.0
-        ),
-    })
+    summary = BenchmarkSummary.model_validate(
+        {
+            "schema_version": "1.0",
+            "created_at": datetime.now(UTC).isoformat(),
+            "input": str(input_path),
+            "input_sha256": file_sha256(input_path),
+            "output": str(output_path),
+            "output_sha256": file_sha256(output_path),
+            "summary": str(summary_path),
+            "method": method,
+            "model": model,
+            "concurrency": concurrency,
+            "atlas": atlas,
+            "atlas_space": space,
+            "registry": str(registry_path),
+            "registry_sha256": registry_hash,
+            "localization_prompt_sha256": text_sha256(LOCALIZATION_PROMPT),
+            "extraction_prompt_sha256": (text_sha256(EXTRACTION_PROMPT) if extract_findings else None),
+            "compatibility_prompt_sha256": (text_sha256(COMPATIBILITY_PROMPT) if extract_findings else None),
+            "extract_findings": extract_findings,
+            "covale_version": version("covale"),
+            "git_commit": git_commit(repository),
+            "python_version": platform.python_version(),
+            "rows": len(annotated_rows),
+            "succeeded": succeeded,
+            "failed": failed,
+            "setup_seconds": setup_seconds,
+            "total_seconds": total_seconds,
+            "mean_row_seconds": (sum(durations) / len(durations) if durations else 0.0),
+        }
+    )
     summary_path.write_text(
         summary.model_dump_json(indent=2) + "\n",
         encoding="utf-8",
@@ -237,9 +220,7 @@ def annotate_jsonl(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Annotate JSONL phrase pairs with COVALE scores and timings."
-    )
+    parser = argparse.ArgumentParser(description="Annotate JSONL phrase pairs with COVALE scores and timings.")
     parser.add_argument("input", type=Path, help="Input JSONL file.")
     parser.add_argument("output", type=Path, help="Annotated output JSONL file.")
     parser.add_argument(

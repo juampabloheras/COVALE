@@ -111,9 +111,7 @@ def test_registry_path_cannot_escape(registry: Path) -> None:
 def test_evaluate_localizes_descriptions_independently(registry: Path) -> None:
     localized: list[str] = []
 
-    def build_expression(
-        text: str, _registry: object
-    ) -> dict[str, str]:
+    def build_expression(text: str, _registry: object) -> dict[str, str]:
         localized.append(text)
         return region("region a" if text == "reference" else "region b")
 

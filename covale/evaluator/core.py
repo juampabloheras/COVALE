@@ -54,9 +54,7 @@ class COVALE:
             raise ValueError("concurrency must be at least 1.")
         if errors not in {"raise", "record"}:
             raise ValueError(f"Unknown error mode: {errors}")
-        selected_output = output_mode or (
-            "per_sample" if per_sample else "default"
-        )
+        selected_output = output_mode or ("per_sample" if per_sample else "default")
         if errors == "record" and selected_output != "detailed":
             raise ValueError("errors='record' requires output_mode='detailed'.")
 
@@ -71,9 +69,7 @@ class COVALE:
         self.errors = errors
         self.client = client
         self.agent = agent
-        self.results: dict[
-            tuple[str, str, bool, str, str], dict[str, Any]
-        ] = {}
+        self.results: dict[tuple[str, str, bool, str, str], dict[str, Any]] = {}
 
     @classmethod
     def from_config(
@@ -85,16 +81,12 @@ class COVALE:
     ) -> "COVALE":
         config_path = Path(path)
         try:
-            config_data = yaml.safe_load(
-                config_path.read_text(encoding="utf-8")
-            )
+            config_data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
             config = EvaluatorConfig.model_validate(config_data)
         except OSError as error:
             raise ValueError(f"Could not read config: {config_path}") from error
         except (yaml.YAMLError, ValidationError) as error:
-            raise ValueError(
-                f"Invalid YAML config {config_path}: {error}"
-            ) from error
+            raise ValueError(f"Invalid YAML config {config_path}: {error}") from error
 
         settings = config.dice_settings()
         registry_path = Path(settings.registry_path or str(DEFAULT_REGISTRY))
@@ -117,9 +109,7 @@ class COVALE:
         )
 
     def prepare_provider(self) -> None:
-        if (
-            self.extract_findings or self.method in {"llm", "similarity"}
-        ) and self.client is None:
+        if (self.extract_findings or self.method in {"llm", "similarity"}) and self.client is None:
             self.client = create_client()
         if self.method == "deep_agent" and self.agent is None:
             self.agent = create_agent(self.model)
@@ -191,10 +181,7 @@ class COVALE:
         work = list(dict.fromkeys(pairs)) if self.cache else pairs
 
         if self.concurrency == 1:
-            work_results = [
-                self.evaluate_pair(reference, candidate)
-                for reference, candidate in work
-            ]
+            work_results = [self.evaluate_pair(reference, candidate) for reference, candidate in work]
         else:
             with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
                 work_results = list(
@@ -213,23 +200,13 @@ class COVALE:
         scores = [result.get("score") for result in results]
         if self.output_mode == "per_sample":
             return {"dice": scores}
-        resolved_scores = [
-            float(score)
-            for score in scores
-            if isinstance(score, int | float) and not isinstance(score, bool)
-        ]
+        resolved_scores = [float(score) for score in scores if isinstance(score, int | float) and not isinstance(score, bool)]
         if not resolved_scores:
             raise ValueError("No COVALE pairs were resolved.")
         mean = float(np.mean(resolved_scores))
         if self.output_mode == "detailed":
-            failures = [
-                result["diagnostics"]
-                for result in results
-                if not result["diagnostics"]["resolved"]
-            ]
-            failure_counts = Counter(
-                failure["error_type"] for failure in failures
-            )
+            failures = [result["diagnostics"] for result in results if not result["diagnostics"]["resolved"]]
+            failure_counts = Counter(failure["error_type"] for failure in failures)
             return {
                 "dice": mean,
                 "dice_std": float(np.std(resolved_scores)),

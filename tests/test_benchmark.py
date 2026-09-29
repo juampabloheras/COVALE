@@ -40,10 +40,7 @@ def test_annotate_jsonl_scores_every_row(
         client=object(),
     )
 
-    rows = [
-        json.loads(line)
-        for line in output_path.read_text(encoding="utf-8").splitlines()
-    ]
+    rows = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
     assert [row["covale"]["score"] for row in rows] == [0.75, 0.75]
     assert all(row["covale"]["elapsed_seconds"] >= 0 for row in rows)
     assert summary["succeeded"] == 2
@@ -74,10 +71,7 @@ def test_annotate_jsonl_records_error_and_continues(
 
     summary = run.annotate_jsonl(input_path, output_path, client=object())
 
-    rows = [
-        json.loads(line)
-        for line in output_path.read_text(encoding="utf-8").splitlines()
-    ]
+    rows = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
     assert rows[0]["covale"]["status"] == "error"
     assert rows[0]["covale"]["error"] == "unresolved"
     assert rows[1]["covale"]["status"] == "ok"
@@ -92,9 +86,7 @@ def test_annotate_jsonl_records_malformed_json(
     input_path = tmp_path / "pairs.jsonl"
     output_path = tmp_path / "annotated.jsonl"
     input_path.write_text(
-        "not json\n"
-        + json.dumps({"reference": "one", "candidate": "two"})
-        + "\n",
+        "not json\n" + json.dumps({"reference": "one", "candidate": "two"}) + "\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -108,10 +100,7 @@ def test_annotate_jsonl_records_malformed_json(
 
     summary = run.annotate_jsonl(input_path, output_path, client=object())
 
-    rows = [
-        json.loads(line)
-        for line in output_path.read_text(encoding="utf-8").splitlines()
-    ]
+    rows = [json.loads(line) for line in output_path.read_text(encoding="utf-8").splitlines()]
     assert rows[0]["covale"]["error_type"] == "ValidationError"
     assert rows[1]["covale"]["score"] == 1.0
     assert summary["failed"] == 1

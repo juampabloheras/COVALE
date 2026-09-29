@@ -42,9 +42,7 @@ def extract_anatomical_units(
     try:
         result = FindingExtraction.model_validate(response)
     except ValidationError as error:
-        raise ModelResponseError(
-            f"Invalid finding extraction response: {error}"
-        ) from error
+        raise ModelResponseError(f"Invalid finding extraction response: {error}") from error
     return list(result.findings)
 
 
@@ -63,33 +61,21 @@ def compatible_unit_pairs(
         model=model,
         instructions=COMPATIBILITY_PROMPT,
         payload={
-            "reference_findings": [
-                unit.model_dump() for unit in references
-            ],
-            "candidate_findings": [
-                unit.model_dump() for unit in candidates
-            ],
+            "reference_findings": [unit.model_dump() for unit in references],
+            "candidate_findings": [unit.model_dump() for unit in candidates],
         },
     )
     try:
         result = CompatibilityResult.model_validate(response)
     except ValidationError as error:
-        raise ModelResponseError(
-            f"Invalid finding compatibility response: {error}"
-        ) from error
+        raise ModelResponseError(f"Invalid finding compatibility response: {error}") from error
 
     compatible: set[tuple[int, int]] = set()
     for pair in result.compatible_pairs:
         if pair.reference_index >= len(references):
-            raise ModelResponseError(
-                "Finding compatibility response contains an invalid "
-                "reference index."
-            )
+            raise ModelResponseError("Finding compatibility response contains an invalid " "reference index.")
         if pair.candidate_index >= len(candidates):
-            raise ModelResponseError(
-                "Finding compatibility response contains an invalid "
-                "candidate index."
-            )
+            raise ModelResponseError("Finding compatibility response contains an invalid " "candidate index.")
         reference = references[pair.reference_index]
         candidate = candidates[pair.candidate_index]
         if reference.assertion != candidate.assertion:

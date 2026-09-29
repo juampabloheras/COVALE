@@ -24,10 +24,7 @@ def create_client() -> OpenAIClient:
         from dotenv import load_dotenv
         from openai import OpenAI, OpenAIError
     except ImportError as error:
-        raise ProviderError(
-            "OpenAI is a core COVALE dependency. Reinstall COVALE to "
-            "restore the provider."
-        ) from error
+        raise ProviderError("OpenAI is a core COVALE dependency. Reinstall COVALE to " "restore the provider.") from error
 
     load_dotenv()
     try:
@@ -46,10 +43,7 @@ def request_json(
     try:
         from openai import OpenAIError
     except ImportError as error:
-        raise ProviderError(
-            "OpenAI is a core COVALE dependency. Reinstall COVALE to "
-            "restore the provider."
-        ) from error
+        raise ProviderError("OpenAI is a core COVALE dependency. Reinstall COVALE to " "restore the provider.") from error
 
     try:
         response = client.responses.create(

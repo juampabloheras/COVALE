@@ -31,7 +31,5 @@ def build_expression(
         },
     )
     if not isinstance(expression.get("op"), str):
-        raise LocalizationError(
-            "LLM localization response must contain a string op."
-        )
+        raise LocalizationError("LLM localization response must contain a string op.")
     return expression

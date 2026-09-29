@@ -8,9 +8,7 @@ from covale.masks import AtlasMask, difference, intersection, load_mask, union
 from covale.models import AtlasRegistry, validate_expression
 from covale.prompts import LOCALIZATION_PROMPT
 
-DEFAULT_REGISTRY = (
-    Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
-)
+DEFAULT_REGISTRY = Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
 Expression = Mapping[str, Any]
 ExpressionBuilder = Callable[[str, Mapping[str, Any]], Expression]
 
@@ -22,9 +20,7 @@ class LocalizationError(ValueError):
 def load_registry(registry_path: str | Path) -> dict[str, Any]:
     path = Path(registry_path)
     try:
-        registry = AtlasRegistry.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        registry = AtlasRegistry.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValidationError) as error:
         raise LocalizationError(f"Could not read atlas registry: {path}") from error
 
@@ -56,11 +52,7 @@ def execute_expression(
                     and requested_name
                     in {
                         region_name.casefold(),
-                        *(
-                            alias.casefold()
-                            for alias in entry.get("aliases", [])
-                            if isinstance(alias, str)
-                        ),
+                        *(alias.casefold() for alias in entry.get("aliases", []) if isinstance(alias, str)),
                     }
                 ),
                 "",
@@ -79,9 +71,7 @@ def execute_expression(
 
         mask_path = (registry_root / relative_path).resolve()
         if not mask_path.is_relative_to(registry_root):
-            raise LocalizationError(
-                "Atlas mask path must remain inside atlas_registry."
-            )
+            raise LocalizationError("Atlas mask path must remain inside atlas_registry.")
         if not mask_path.is_file():
             raise LocalizationError(f"Atlas mask does not exist: {relative_path}")
         return load_mask(mask_path)
@@ -97,9 +87,7 @@ def execute_expression(
             raise LocalizationError("Anatomical description could not be localized.")
 
         if operator == "region":
-            if set(node) != {"op", "name"} or not isinstance(
-                node.get("name"), str
-            ):
+            if set(node) != {"op", "name"} or not isinstance(node.get("name"), str):
                 raise LocalizationError("Region expression requires a string name.")
             return resolve_region(node["name"])
 
@@ -135,9 +123,7 @@ def expression_stats(expression: Expression) -> dict[str, int]:
         operations = 1
         max_depth = depth
         for argument in arguments:
-            child_regions, child_operations, child_depth = count(
-                argument, depth + 1
-            )
+            child_regions, child_operations, child_depth = count(argument, depth + 1)
             regions += child_regions
             operations += child_operations
             max_depth = max(max_depth, child_depth)
@@ -169,9 +155,7 @@ def localize_with_expression(
                 name,
                 *(alias for alias in aliases if isinstance(alias, str)),
             ]
-            if requested_name in {
-                available_name.casefold() for available_name in available_names
-            }:
+            if requested_name in {available_name.casefold() for available_name in available_names}:
                 expression = {"op": "region", "name": name}
                 break
     else:
@@ -182,9 +166,7 @@ def localize_with_expression(
     try:
         expression = validate_expression(expression).model_dump()
     except ValidationError as error:
-        raise LocalizationError(
-            f"Localization returned an invalid expression: {error}"
-        ) from error
+        raise LocalizationError(f"Localization returned an invalid expression: {error}") from error
     return expression, execute_expression(expression, registry_path)
 
 
