@@ -1,6 +1,6 @@
 [project]
 name = "covale"
-version = "0.1.0"
+version = "0.1.1"
 description = "Compositional Open-Vocabulary Anatomical Localization Evaluation"
 readme = "README.md"
 license = "MIT"
@@ -36,3 +36,9 @@ dev = [
 
 [tool.uv.build-backend]
 module-root = ""
+
+
+[project.urls]
+Homepage = "https://github.com/juampabloheras/COVALE"
+Repository = "https://github.com/juampabloheras/COVALE"
+Issues = "https://github.com/juampabloheras/COVALE/issues"
