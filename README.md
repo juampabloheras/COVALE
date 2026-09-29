@@ -7,11 +7,7 @@ measures how much the regions overlap. This makes it easy to compare generated
 descriptions, evaluate systems, and provide spatial feedback during model
 training.
 
-```text
-reference text -> localization -> atlas ROI --\
-                                                -> Dice -> COVALE
-candidate text -> localization -> atlas ROI --/
-```
+![Overview comparing COVALE with lexical and LLM-based evaluation](assets/overview.png)
 
 ## Table of contents
 
