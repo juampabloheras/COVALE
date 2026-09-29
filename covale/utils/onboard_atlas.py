@@ -69,15 +69,15 @@ class CanonicalLabel(StrictModel):
 
     @model_validator(mode="after")
     def normalize_synonyms(self) -> "CanonicalLabel":
-        synonyms = []
+        normalized_synonyms = []
         seen = set()
         for value in self.synonyms:
             value = value.strip()
             folded = value.casefold()
             if value and folded not in seen:
-                synonyms.append(value)
+                normalized_synonyms.append(value)
                 seen.add(folded)
-        self.synonyms = synonyms
+        self.synonyms = normalized_synonyms
         return self
 
 
