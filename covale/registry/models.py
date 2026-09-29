@@ -1,8 +1,8 @@
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
-from covale.models import StrictModel
+from covale.utils.models import StrictModel
 
 Laterality = Literal[
     "left",
@@ -11,6 +11,66 @@ Laterality = Literal[
     "midline",
     "unknown",
 ]
+
+
+class LegacyAtlasRegion(StrictModel):
+    mask: str = Field(min_length=1)
+    aliases: list[str] = Field(default_factory=list)
+
+
+class LegacyAtlasRegistry(StrictModel):
+    atlas: str = Field(min_length=1)
+    space: str = Field(min_length=1)
+    regions: dict[str, LegacyAtlasRegion]
+
+
+class RegionExpression(StrictModel):
+    op: Literal["region"]
+    id: str | None = Field(default=None, min_length=1)
+    name: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def require_one_reference(self) -> "RegionExpression":
+        if (self.id is None) == (self.name is None):
+            raise ValueError("Region expression requires exactly one of id or name.")
+        return self
+
+
+class UnionExpression(StrictModel):
+    op: Literal["union"]
+    args: list["Expression"] = Field(min_length=2)
+
+
+class IntersectionExpression(StrictModel):
+    op: Literal["intersection"]
+    args: list["Expression"] = Field(min_length=2)
+
+
+class DifferenceExpression(StrictModel):
+    op: Literal["difference"]
+    args: list["Expression"] = Field(min_length=2)
+
+
+class UnresolvedExpression(StrictModel):
+    op: Literal["unresolved"]
+
+
+Expression = Annotated[
+    RegionExpression
+    | UnionExpression
+    | IntersectionExpression
+    | DifferenceExpression
+    | UnresolvedExpression,
+    Field(discriminator="op"),
+]
+UnionExpression.model_rebuild()
+IntersectionExpression.model_rebuild()
+DifferenceExpression.model_rebuild()
+EXPRESSION_ADAPTER = TypeAdapter(Expression)
+
+
+def validate_expression(value: object) -> Expression:
+    return EXPRESSION_ADAPTER.validate_python(value)
 
 
 class AtlasSpace(StrictModel):

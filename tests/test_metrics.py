@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from covale.metrics import dice
+from covale import dice
 
 
 def test_identity() -> None:

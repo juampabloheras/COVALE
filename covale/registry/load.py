@@ -6,9 +6,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from covale.models import AtlasRegistry as RegistryV1
 from covale.registry.models import (
     AtlasSpace,
+    LegacyAtlasRegistry,
     MaskSource,
     RegionDefinition,
     RegionMatch,
@@ -25,9 +25,7 @@ def normalize_term(value: str) -> str:
     value = re.sub(r"[_-]+", " ", value)
     value = re.sub(r"\s+", " ", value)
     tokens = [
-        "left" if token in {"l", "lh"} else
-        "right" if token in {"r", "rh"} else
-        token
+        "left" if token in {"l", "lh"} else "right" if token in {"r", "rh"} else token
         for token in value.split()
     ]
     return " ".join(tokens)
@@ -53,7 +51,7 @@ def _slug(value: str) -> str:
     return value.strip("-") or "region"
 
 
-def _convert_v1(registry: RegistryV1) -> RegistryV2:
+def _convert_v1(registry: LegacyAtlasRegistry) -> RegistryV2:
     regions = {}
     used_ids: set[str] = set()
     for name, region in registry.regions.items():
@@ -97,7 +95,7 @@ class Registry:
             if payload.get("schema_version") == 2:
                 model = RegistryV2.model_validate(payload)
             else:
-                model = _convert_v1(RegistryV1.model_validate(payload))
+                model = _convert_v1(LegacyAtlasRegistry.model_validate(payload))
         except OSError as error:
             raise RegistryError(f"Could not read registry: {path}") from error
         except json.JSONDecodeError as error:
@@ -246,8 +244,4 @@ class Registry:
     def _priority(self, region_id: str) -> int:
         source = self.model.regions[region_id].source
         atlas_id = getattr(source, "atlas", None)
-        return (
-            self.model.atlases[atlas_id].priority
-            if atlas_id is not None
-            else 0
-        )
+        return self.model.atlases[atlas_id].priority if atlas_id is not None else 0

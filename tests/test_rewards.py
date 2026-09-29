@@ -1,5 +1,5 @@
 from benchmark.rewards import benchmark_reward
-from covale.rewards import completion_text, make_reward_fn
+from covale.evaluator.rewards import completion_text, make_reward_fn
 
 
 class FakeEvaluator:

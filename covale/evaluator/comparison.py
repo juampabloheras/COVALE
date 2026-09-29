@@ -1,4 +1,8 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import (
+    Callable,
+    Mapping,
+    Sequence,
+)
 from numbers import Real
 from typing import Any, Literal
 
@@ -12,7 +16,9 @@ def metric_value(result: object) -> float:
     if isinstance(result, Real) and not isinstance(result, bool):
         value = float(result)
     elif isinstance(result, Mapping):
-        candidate = result["score"] if "score" in result else next(iter(result.values()), None)
+        candidate = (
+            result["score"] if "score" in result else next(iter(result.values()), None)
+        )
         if not isinstance(candidate, Real) or isinstance(candidate, bool):
             raise ValueError("Metric mapping must contain a numeric value.")
         value = float(candidate)
@@ -53,17 +59,27 @@ def compare_systems(
 
     for name, outputs in systems.items():
         if len(outputs) != len(references):
-            raise ValueError(f"System '{name}' has {len(outputs)} outputs for " f"{len(references)} references.")
+            raise ValueError(
+                f"System '{name}' has {len(outputs)} outputs for "
+                f"{len(references)} references."
+            )
 
     system_names = list(systems)
     baseline_name = system_names[0]
-    cached: dict[str, dict[str, np.ndarray]] = {system_name: {} for system_name in system_names}
-    scores: dict[str, dict[str, float]] = {system_name: {} for system_name in system_names}
+    cached: dict[str, dict[str, np.ndarray]] = {
+        system_name: {} for system_name in system_names
+    }
+    scores: dict[str, dict[str, float]] = {
+        system_name: {} for system_name in system_names
+    }
 
     for system_name, outputs in systems.items():
         for metric_name, metric in metrics.items():
             pair_scores = np.array(
-                [metric_value(metric([candidate], [reference])) for candidate, reference in zip(outputs, references, strict=True)],
+                [
+                    metric_value(metric([candidate], [reference]))
+                    for candidate, reference in zip(outputs, references, strict=True)
+                ],
                 dtype=float,
             )
             cached[system_name][metric_name] = pair_scores
@@ -75,7 +91,9 @@ def compare_systems(
 
     for system_name in system_names[1:]:
         for metric_name in metrics:
-            differences = cached[system_name][metric_name] - cached[baseline_name][metric_name]
+            differences = (
+                cached[system_name][metric_name] - cached[baseline_name][metric_name]
+            )
             delta = float(differences.mean())
             if test == "bootstrap":
                 sampled_deltas = np.empty(n_samples, dtype=float)
@@ -83,8 +101,12 @@ def compare_systems(
                     indices = rng.integers(0, len(references), len(references))
                     sampled_deltas[sample] = differences[indices].mean()
 
-                non_positive = (np.count_nonzero(sampled_deltas <= 0) + 1) / (n_samples + 1)
-                non_negative = (np.count_nonzero(sampled_deltas >= 0) + 1) / (n_samples + 1)
+                non_positive = (np.count_nonzero(sampled_deltas <= 0) + 1) / (
+                    n_samples + 1
+                )
+                non_negative = (np.count_nonzero(sampled_deltas >= 0) + 1) / (
+                    n_samples + 1
+                )
                 p_value = min(1.0, 2 * min(non_positive, non_negative))
                 lower, upper = np.percentile(sampled_deltas, confidence)
                 confidence_interval: list[float] | None = [

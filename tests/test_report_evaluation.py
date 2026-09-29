@@ -6,7 +6,7 @@ import nibabel as nib
 import numpy as np
 
 from covale import COVALE
-from covale.evaluate import align_units, evaluate
+from covale.evaluator import align_units, evaluate
 from covale.evaluator.report_processing import AnatomicalUnit
 
 
@@ -121,7 +121,9 @@ def test_alignment_maximizes_total_one_to_one_score() -> None:
         },
     )
 
-    assert {(match.reference_index, match.candidate_index) for match in alignment.matches} == {(0, 1), (1, 0)}
+    assert {
+        (match.reference_index, match.candidate_index) for match in alignment.matches
+    } == {(0, 1), (1, 0)}
     assert alignment.missing == []
     assert alignment.spurious == []
 
@@ -149,7 +151,10 @@ def test_report_evaluation_extracts_aligns_and_scores(tmp_path: Path) -> None:
     )
 
     assert result["score"] == 1.0
-    assert {(match["reference_index"], match["candidate_index"]) for match in result["diagnostics"]["matches"]} == {(0, 1), (1, 0)}
+    assert {
+        (match["reference_index"], match["candidate_index"])
+        for match in result["diagnostics"]["matches"]
+    } == {(0, 1), (1, 0)}
     assert result["diagnostics"]["missing"] == []
     assert result["diagnostics"]["spurious"] == []
     assert len(client.responses.requests) == 3
@@ -177,7 +182,9 @@ def test_report_evaluation_penalizes_missing_findings(
     )
 
     assert result["score"] == 0.5
-    assert [item["anatomy"] for item in result["diagnostics"]["missing"]] == ["region b"]
+    assert [item["anatomy"] for item in result["diagnostics"]["missing"]] == [
+        "region b"
+    ]
     assert result["diagnostics"]["spurious"] == []
 
 

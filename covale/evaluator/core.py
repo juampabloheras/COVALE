@@ -16,7 +16,7 @@ from covale.evaluator.evaluate import (
 from covale.localize import DEFAULT_REGISTRY
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
-from covale.models import EvaluatorConfig
+from covale.evaluator.models import EvaluatorConfig
 
 OutputMode = Literal["default", "per_sample", "detailed"]
 ErrorMode = Literal["raise", "record"]
@@ -109,7 +109,9 @@ class COVALE:
         )
 
     def prepare_provider(self) -> None:
-        if (self.extract_findings or self.method in {"llm", "similarity"}) and self.client is None:
+        if (
+            self.extract_findings or self.method in {"llm", "similarity"}
+        ) and self.client is None:
             self.client = create_client()
         if self.method == "deep_agent" and self.agent is None:
             self.agent = create_agent(self.model)
@@ -181,7 +183,10 @@ class COVALE:
         work = list(dict.fromkeys(pairs)) if self.cache else pairs
 
         if self.concurrency == 1:
-            work_results = [self.evaluate_pair(reference, candidate) for reference, candidate in work]
+            work_results = [
+                self.evaluate_pair(reference, candidate)
+                for reference, candidate in work
+            ]
         else:
             with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
                 work_results = list(
@@ -200,12 +205,20 @@ class COVALE:
         scores = [result.get("score") for result in results]
         if self.output_mode == "per_sample":
             return {"dice": scores}
-        resolved_scores = [float(score) for score in scores if isinstance(score, int | float) and not isinstance(score, bool)]
+        resolved_scores = [
+            float(score)
+            for score in scores
+            if isinstance(score, int | float) and not isinstance(score, bool)
+        ]
         if not resolved_scores:
             raise ValueError("No COVALE pairs were resolved.")
         mean = float(np.mean(resolved_scores))
         if self.output_mode == "detailed":
-            failures = [result["diagnostics"] for result in results if not result["diagnostics"]["resolved"]]
+            failures = [
+                result["diagnostics"]
+                for result in results
+                if not result["diagnostics"]["resolved"]
+            ]
             failure_counts = Counter(failure["error_type"] for failure in failures)
             return {
                 "dice": mean,

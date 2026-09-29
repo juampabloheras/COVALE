@@ -8,10 +8,9 @@ from covale.localize.openai_client import (
     OpenAIClient,
     request_json,
 )
-from covale.models import validate_expression
 from covale.prompts import LOCALIZATION_PROMPT
 from covale.registry.load import Registry, RegistryError
-from covale.registry.models import RegistryV2
+from covale.registry.models import RegistryV2, validate_expression
 
 
 class RegistryResolver:
@@ -57,9 +56,7 @@ class RegistryResolver:
             query,
             limit=self.candidate_limit,
         )
-        exact_ids = {
-            match.region_id for match in matches if match.score == 1.0
-        }
+        exact_ids = {match.region_id for match in matches if match.score == 1.0}
         if len(exact_ids) == 1:
             return {"op": "region", "id": exact_ids.pop()}
 
@@ -85,9 +82,7 @@ class RegistryResolver:
         allowed_ids: set[str],
     ) -> dict[str, Any]:
         try:
-            expression = validate_expression(response).model_dump(
-                exclude_none=True
-            )
+            expression = validate_expression(response).model_dump(exclude_none=True)
         except ValidationError as error:
             raise ModelResponseError(
                 f"Invalid localization expression: {error}"

@@ -3,7 +3,7 @@ from covale.localize.openai_client import (
     create_client,
     request_json,
 )
-from covale.models import SimilarityResponse
+from covale.localize.models import SimilarityResponse
 from covale.prompts import SIMILARITY_PROMPT
 
 

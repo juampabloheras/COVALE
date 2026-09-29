@@ -4,12 +4,20 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from covale.masks import AtlasMask, difference, intersection, union
-from covale.models import validate_expression
 from covale.prompts import LOCALIZATION_PROMPT
-from covale.registry import Registry, RegistryError
+from covale.registry import (
+    AtlasMask,
+    Registry,
+    RegistryError,
+    difference,
+    intersection,
+    union,
+)
+from covale.registry.models import validate_expression
 
-DEFAULT_REGISTRY = Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
+DEFAULT_REGISTRY = (
+    Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
+)
 Expression = Mapping[str, Any]
 ExpressionBuilder = Callable[[str, Mapping[str, Any]], Expression]
 
@@ -148,7 +156,9 @@ def localize_with_expression(
     try:
         expression = validate_expression(expression).model_dump(exclude_none=True)
     except ValidationError as error:
-        raise LocalizationError(f"Localization returned an invalid expression: {error}") from error
+        raise LocalizationError(
+            f"Localization returned an invalid expression: {error}"
+        ) from error
     return expression, execute_expression(expression, registry_path)
 
 

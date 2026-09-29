@@ -1,9 +1,14 @@
-from covale.comparison import compare_systems
-from covale.evaluator import COVALE, covale, evaluate, evaluate_batch
+from covale.evaluator import (
+    COVALE,
+    compare_systems,
+    covale,
+    dice,
+    evaluate,
+    evaluate_batch,
+    make_reward_fn,
+)
 from covale.localize import LocalizationError, execute_expression, localize
-from covale.masks import AtlasMask
-from covale.metrics import dice
-from covale.rewards import make_reward_fn
+from covale.registry import AtlasMask
 
 __all__ = [
     "AtlasMask",

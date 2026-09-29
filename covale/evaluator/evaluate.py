@@ -22,8 +22,8 @@ from covale.localize.deep_agent import (
 from covale.localize.llm import build_expression as llm_expression
 from covale.localize.openai_client import OpenAIClient, create_client
 from covale.localize.similarity import compare
-from covale.metrics import dice
-from covale.models import Alignment, UnitMatch
+from covale.evaluator.metrics import dice
+from covale.evaluator.report_processing.models import Alignment, UnitMatch
 
 CovaleMethod = Literal["llm", "deep_agent", "similarity"]
 DEFAULT_MODEL = "gpt-6-astra"
@@ -81,7 +81,9 @@ def _evaluate_anatomy(
     elif method == "deep_agent":
         deep_agent = agent or create_agent(model)
 
-        def build_with_agent(text: str, registry: Mapping[str, Any]) -> Mapping[str, Any]:
+        def build_with_agent(
+            text: str, registry: Mapping[str, Any]
+        ) -> Mapping[str, Any]:
             return agent_expression(
                 text,
                 registry,
@@ -94,10 +96,14 @@ def _evaluate_anatomy(
         raise ValueError(f"Unknown COVALE method: {method}")
 
     reference_started = perf_counter()
-    reference_expression, reference_mask = localize_with_expression(reference, registry_path, builder)
+    reference_expression, reference_mask = localize_with_expression(
+        reference, registry_path, builder
+    )
     reference_seconds = perf_counter() - reference_started
     candidate_started = perf_counter()
-    candidate_expression, candidate_mask = localize_with_expression(candidate, registry_path, builder)
+    candidate_expression, candidate_mask = localize_with_expression(
+        candidate, registry_path, builder
+    )
     candidate_seconds = perf_counter() - candidate_started
     dice_started = perf_counter()
     score = dice(reference_mask.data, candidate_mask.data)
@@ -143,7 +149,11 @@ def _minimum_cost_assignment(costs: list[list[float]]) -> list[int]:
             for candidate_right in range(1, size + 1):
                 if used[candidate_right]:
                     continue
-                reduced = costs[current_left - 1][candidate_right - 1] - potentials_left[current_left] - potentials_right[candidate_right]
+                reduced = (
+                    costs[current_left - 1][candidate_right - 1]
+                    - potentials_left[current_left]
+                    - potentials_right[candidate_right]
+                )
                 if reduced < minimum[candidate_right]:
                     minimum[candidate_right] = reduced
                     path[candidate_right] = right
@@ -201,8 +211,14 @@ def align_units(
     for reference_index in range(reference_count):
         for candidate_index in range(candidate_count):
             pair = (reference_index, candidate_index)
-            weights[reference_index][candidate_index] = float(pair_results[pair]["score"]) + 1e-9 if pair in pair_results else -2.0
-    assignment = _minimum_cost_assignment([[-weight for weight in row] for row in weights])
+            weights[reference_index][candidate_index] = (
+                float(pair_results[pair]["score"]) + 1e-9
+                if pair in pair_results
+                else -2.0
+            )
+    assignment = _minimum_cost_assignment(
+        [[-weight for weight in row] for row in weights]
+    )
 
     matches: list[UnitMatch] = []
     matched_references: set[int] = set()
@@ -228,8 +244,16 @@ def align_units(
 
     return Alignment(
         matches=matches,
-        missing=[unit for index, unit in enumerate(references) if index not in matched_references],
-        spurious=[unit for index, unit in enumerate(candidates) if index not in matched_candidates],
+        missing=[
+            unit
+            for index, unit in enumerate(references)
+            if index not in matched_references
+        ],
+        spurious=[
+            unit
+            for index, unit in enumerate(candidates)
+            if index not in matched_candidates
+        ],
     )
 
 
@@ -302,7 +326,11 @@ def evaluate(
         return score_pair(references[0], candidates[0])
 
     denominator = max(len(references), len(candidates))
-    score = sum(match.score for match in alignment.matches) / denominator if denominator else 1.0
+    score = (
+        sum(match.score for match in alignment.matches) / denominator
+        if denominator
+        else 1.0
+    )
     return {
         "reference": reference,
         "candidate": candidate,
@@ -366,7 +394,9 @@ def evaluate_batch(
         reference = pair.get("reference")
         candidate = pair.get("candidate")
         if not isinstance(reference, str) or not isinstance(candidate, str):
-            raise ValueError(f"Pair {index} must contain string reference and candidate fields.")
+            raise ValueError(
+                f"Pair {index} must contain string reference and candidate fields."
+            )
         results.append(
             evaluate(
                 reference,

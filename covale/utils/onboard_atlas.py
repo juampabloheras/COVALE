@@ -14,7 +14,6 @@ from covale.localize.openai_client import (
     create_client,
     request_json,
 )
-from covale.models import StrictModel
 from covale.prompts import ATLAS_ONBOARDING_PROMPT
 from covale.registry import Registry
 from covale.registry.masks import load_label_volume, sha256_file
@@ -25,6 +24,7 @@ from covale.registry.models import (
     RegionDefinition,
     RegistryV2,
 )
+from covale.utils.models import StrictModel
 
 Canonicalization = Literal["none", "deterministic", "openai"]
 

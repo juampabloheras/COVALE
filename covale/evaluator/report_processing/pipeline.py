@@ -9,7 +9,11 @@ from covale.localize.openai_client import (
     OpenAIClient,
     request_json,
 )
-from covale.models import AnatomicalUnit, ReportFinding, StrictModel
+from covale.evaluator.report_processing.models import (
+    AnatomicalUnit,
+    ReportFinding,
+)
+from covale.utils.models import StrictModel
 
 
 class FindingExtraction(StrictModel):
@@ -42,7 +46,9 @@ def extract_anatomical_units(
     try:
         result = FindingExtraction.model_validate(response)
     except ValidationError as error:
-        raise ModelResponseError(f"Invalid finding extraction response: {error}") from error
+        raise ModelResponseError(
+            f"Invalid finding extraction response: {error}"
+        ) from error
     return list(result.findings)
 
 
@@ -68,14 +74,20 @@ def compatible_unit_pairs(
     try:
         result = CompatibilityResult.model_validate(response)
     except ValidationError as error:
-        raise ModelResponseError(f"Invalid finding compatibility response: {error}") from error
+        raise ModelResponseError(
+            f"Invalid finding compatibility response: {error}"
+        ) from error
 
     compatible: set[tuple[int, int]] = set()
     for pair in result.compatible_pairs:
         if pair.reference_index >= len(references):
-            raise ModelResponseError("Finding compatibility response contains an invalid " "reference index.")
+            raise ModelResponseError(
+                "Finding compatibility response contains an invalid " "reference index."
+            )
         if pair.candidate_index >= len(candidates):
-            raise ModelResponseError("Finding compatibility response contains an invalid " "candidate index.")
+            raise ModelResponseError(
+                "Finding compatibility response contains an invalid " "candidate index."
+            )
         reference = references[pair.reference_index]
         candidate = candidates[pair.candidate_index]
         if reference.assertion != candidate.assertion:

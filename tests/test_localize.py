@@ -5,7 +5,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from covale.evaluate import covale, evaluate, evaluate_batch
+from covale import covale, evaluate, evaluate_batch
 from covale.localize import deep_agent
 from covale.localize.openai_client import ModelResponseError
 from covale.localize import LocalizationError, execute_expression

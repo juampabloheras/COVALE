@@ -8,7 +8,7 @@ def dice(a: np.ndarray, b: np.ndarray) -> float:
     if a.shape != b.shape:
         raise ValueError("Masks must have the same shape.")
 
-    denominator = a.sum() + b.sum()
+    denominator = int(a.sum() + b.sum())
     if denominator == 0:
         return 1.0
 

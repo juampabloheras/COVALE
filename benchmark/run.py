@@ -10,7 +10,14 @@ from time import perf_counter
 from typing import Any
 
 from covale import evaluate
-from covale.evaluate import DEFAULT_MODEL, CovaleMethod
+from benchmark.models import (
+    BenchmarkRecord,
+    BenchmarkSummary,
+    ErrorAnnotation,
+    Pair,
+    SuccessfulAnnotation,
+)
+from covale.evaluator import DEFAULT_MODEL, CovaleMethod
 from covale.prompts import (
     COMPATIBILITY_PROMPT,
     EXTRACTION_PROMPT,
@@ -18,15 +25,7 @@ from covale.prompts import (
 )
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
-from covale.models import (
-    AtlasRegistry,
-    BenchmarkRecord,
-    BenchmarkSummary,
-    ErrorAnnotation,
-    Pair,
-    SuccessfulAnnotation,
-)
-from covale.registry.models import RegistryV2
+from covale.registry.models import LegacyAtlasRegistry, RegistryV2
 
 EXPECTED_ROW_ERRORS = (
     ValueError,
@@ -197,7 +196,7 @@ def annotate_jsonl(
             space = registry_v2.space.name
             registry_schema_version = 2
         else:
-            registry_v1 = AtlasRegistry.model_validate(registry_payload)
+            registry_v1 = LegacyAtlasRegistry.model_validate(registry_payload)
             atlas = registry_v1.atlas
             atlas_ids = [registry_v1.atlas]
             space = registry_v1.space

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from covale.masks import AtlasMask, difference, intersection, union
+from covale.registry import AtlasMask, difference, intersection, union
 
 AFFINE = np.eye(4)
 
