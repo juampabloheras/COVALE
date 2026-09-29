@@ -23,6 +23,7 @@ candidate text -> localization -> atlas ROI --/
 - [Config file](#config-file)
 - [RL rewards](#rl-rewards)
 - [Adding a new atlas primitive](#adding-a-new-atlas-primitive)
+- [License](#license)
 
 
 ## Install and test
@@ -251,4 +252,8 @@ print(timing)
 ## Adding a new atlas primitive
 
 See [atlas_registry/README.md](atlas_registry/README.md) to add atlas
-primitives. 
+primitives.
+
+## License
+
+COVALE is available under the [MIT License](LICENSE).

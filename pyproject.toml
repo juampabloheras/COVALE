@@ -3,6 +3,8 @@ name = "covale"
 version = "0.1.0"
 description = "Compositional Open-Vocabulary Anatomical Localization Evaluation"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "deepagents>=0.7.19",
