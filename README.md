@@ -1,8 +1,11 @@
 # COVALE: Compositional Open-Vocabulary Anatomical Localization Evaluation
 
-COVALE evaluates spatial agreement between natural-language anatomical
-descriptions by localizing each description within a common anatomical atlas
-and measuring overlap between the resulting regions.
+Text-based metrics can tell whether two anatomical descriptions use similar
+words, but they often miss whether the descriptions point to the same place.
+COVALE turns each description into a 3D region in an anatomical atlas, then
+measures how much the regions overlap. This makes it easy to compare generated
+descriptions, evaluate systems, and provide spatial feedback during model
+training.
 
 ```text
 reference text -> localization -> atlas ROI --\
@@ -10,26 +13,16 @@ reference text -> localization -> atlas ROI --\
 candidate text -> localization -> atlas ROI --/
 ```
 
-## Features
+## Table of contents
 
-- Three localization strategies:
-  - `llm`: direct OpenAI atlas-expression generation
-  - `deep_agent`: tool-using localization with Deep Agents
-  - `similarity`: language-only OpenAI baseline without atlas masks
-- Affine-aware mask composition with `union`, `intersection`, and `difference`
-- Scalar, batch, callable evaluator, YAML config, and JSONL benchmark interfaces
-- Ordered bounded concurrency, pair-level caching, and reusable provider clients
-- Per-pair diagnostics, expression complexity, timing, and recorded failures
-- Paired bootstrap and approximate-randomization system comparisons
-- TRL-compatible reward functions and reward latency benchmarking
-- Pydantic runtime validation for configs, atlas registries, expressions, inputs,
-  and benchmark records
-- Provenance sidecars with content hashes, package versions, Git revision, atlas
-  metadata, and aggregate timing
+- [Install and test](#install-and-test)
+- [Calculate COVALE](#calculate-covale)
+- [Run benchmarks](#run-benchmarks)
+- [Compare systems](#compare-systems)
+- [Config file](#config-file)
+- [RL rewards](#rl-rewards)
+- [Adding a new atlas primitive](#adding-a-new-atlas-primitive)
 
-COVALE assumes that all atlas masks are already aligned in the same coordinate
-system. It validates mask shapes and affines but does not perform image,
-affine, or deformable registration.
 
 ## Install and test
 
@@ -37,16 +30,6 @@ affine, or deformable registration.
 export UV_PROJECT_ENVIRONMENT="$HOME/venvs/covale"
 uv sync
 uv run pytest
-```
-
-The core install contains NumPy, NiBabel, and YAML support. Install only the
-provider integrations needed by an experiment:
-
-```bash
-uv sync --extra openai   # Direct OpenAI localization and similarity
-uv sync --extra agents   # Deep Agents localization
-uv sync --extra rl       # TRL integration
-uv sync --extra all      # Every optional integration
 ```
 
 Copy `.env.example` to `.env` and add a consumer OpenAI API key:
@@ -61,52 +44,38 @@ OPENAI_API_KEY=your-api-key
 
 ## Calculate COVALE
 
-After populating the atlas registry, calculate a scalar COVALE score with
-direct LLM localization. This is the default method:
+| Method | Description | Uses atlas masks |
+|---|---|---|
+| `llm` (default) | Uses OpenAI to map each description to an atlas region, then calculates Dice overlap | Yes |
+| `deep_agent` | Uses a Deep Agent to map each description to an atlas region, then calculates Dice overlap | Yes |
+| `similarity` | Uses OpenAI to compare the descriptions directly as a language-only baseline | No |
+
+After populating the atlas registry, calculate a scalar COVALE score:
 
 ```python
-from covale import covale
+from covale import COVALE
 
-score = covale(
-    "left frontal lobe",
-    "left frontal region",
-    registry_path="atlas_registry/registry.json",
-)
-print(score)
-```
-
-Select any method explicitly and optionally override the model:
-
-```python
-llm_score = covale(
-    "left frontal lobe",
-    "left frontal region",
+covale_evaluator = COVALE(
+    metrics=["dice"],
     method="llm",
     model="gpt-6-astra",
+    registry_path="atlas_registry/registry.json",
+    provider="openai",
+    per_sample=False,
+    output_mode=None,
+    cache=True,
+    concurrency=1,
+    errors="raise",
+    client=None,
+    agent=None,
 )
-
-agent_score = covale(
-    "left frontal lobe",
-    "left frontal region",
-    method="deep_agent",
-    model="gpt-6-astra",
+results = covale_evaluator(
+    refs=["left frontal lobe"],
+    hyps=["left frontal region"],
 )
-
-baseline_score = covale(
-    "left frontal lobe",
-    "left frontal region",
-    method="similarity",
-    model="gpt-6-astra",
-)
+print(results["dice"])
 ```
 
-The `llm` and `deep_agent` methods independently localize each description to
-an atlas expression and calculate Dice overlap. The `similarity` method is a
-language-only baseline and does not use the atlas registry.
-
-Atlas expressions are validated before execution and never passed to `eval()`
-or `exec()`. Unknown operators, regions, or registry fields are rejected
-explicitly.
 
 For a batch, use a JSON file containing an array of phrase pairs:
 
@@ -156,27 +125,17 @@ uv run python benchmark/run.py \
   --concurrency 8
 ```
 
-The runner supports `llm`, `deep_agent`, and `similarity`, records expected
-errors per row without stopping the experiment, and prints aggregate timing
-statistics. It also writes a `.summary.json` provenance sidecar containing
-input/output/registry/prompt hashes, versions, Git revision, atlas metadata,
-and timing. See [benchmark/README.md](benchmark/README.md) for the output
+See [benchmark/README.md](benchmark/README.md) for the output
 format and command options.
 
-Input and output order is preserved when `--concurrency` is greater than one.
-Each output row retains the original fields and adds a validated `covale`
-annotation with its status, score or error, method, model, line number,
-elapsed time, and diagnostics.
 
 ## Compare systems
 
-Use the RadEval-style callable and paired bootstrap interface to compare
-multiple systems:
 
 ```python
 from covale import COVALE, compare_systems
 
-covale_evaluator = COVALE(metrics=["dice"], method="llm")
+covale_evaluator = COVALE()
 signatures, scores = compare_systems(
     systems={
         "baseline": baseline_descriptions,
@@ -191,14 +150,12 @@ signatures, scores = compare_systems(
 )
 ```
 
-Each reference/candidate pair is scored once and cached. Bootstrap resampling
-uses only those cached scores, so increasing `n_samples` does not make
-additional LLM calls. `scores` contains system means and p-values;
+`scores` contains system means and p-values;
 `signatures` contains deltas, confidence intervals, significance flags, and
 reproducibility settings for each comparison.
 
 Set `test="approximate_randomization"` for a paired randomization test instead
-of paired bootstrap. Pair scores remain cached for either test.
+of paired bootstrap.
 
 ## Config file
 
@@ -216,8 +173,6 @@ metrics:
 output:
   mode: detailed
   errors: record
-
-cache: true
 ```
 
 Load the evaluator from the config:
@@ -229,20 +184,26 @@ covale_evaluator = COVALE.from_config("examples/config.yaml")
 results = covale_evaluator(refs=refs, hyps=hyps)
 ```
 
-Output modes are `default`, `per_sample`, and `detailed`. Detailed output
-contains the mean Dice score, standard deviation, per-sample scores,
-localization expressions and timings, expression complexity, resolved
-fraction, and categorized failures. `errors: record` keeps unresolved pairs
-in detailed output; the default `errors: raise` stops explicitly. See
-[`examples/config.yaml`](examples/config.yaml) for a complete example.
+| Output mode | Result |
+|---|---|
+| `default` | Mean Dice score |
+| `per_sample` | Dice score for each reference/candidate pair |
+| `detailed` | Mean and standard deviation, per-sample scores, localization expressions and timings, expression complexity, resolved fraction, and categorized failures |
 
-Repeated reference/candidate pairs are evaluated once when `cache: true`.
-Provider integrations are imported lazily, so the core package can be used
-without installing OpenAI, Deep Agents, or TRL.
+The default `errors: raise` stops when a pair cannot be evaluated.
+`errors: record` is available with `mode: detailed` and includes unresolved
+pairs in the result. See [`examples/config.yaml`](examples/config.yaml) for a
+complete example.
 
 ## RL rewards
 
-Create a cached TRL-compatible reward function:
+Install the optional TRL integration:
+
+```bash
+uv sync --extra rl
+```
+
+Create a TRL-compatible reward function:
 
 ```python
 from covale import make_reward_fn
@@ -261,9 +222,8 @@ rewards = reward_fn(
 ```
 
 The callable accepts plain strings or conversational message lists and
-returns one Dice reward per completion. It reuses the evaluator cache and
-provider. `benchmark.rewards.benchmark_reward` reports reward latency and
-mean reward without requiring TRL at runtime.
+returns one Dice reward per completion.
+`benchmark.rewards.benchmark_reward` reports reward latency and mean reward.
 
 ```python
 from benchmark.rewards import benchmark_reward
