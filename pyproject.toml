@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 covale-migrate-registry = "covale.registry.migrate:main"
+covale-onboard-atlas = "covale.utils.onboard_atlas:main"
 
 [project.optional-dependencies]
 rl = [

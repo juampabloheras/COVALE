@@ -262,6 +262,29 @@ format. It is not a scientific atlas. See
 stable-ID expressions, provenance requirements, and the
 `covale-migrate-registry` converter.
 
+To onboard a new labeled atlas, first create a canonical source directory:
+
+```bash
+covale-onboard-atlas \
+  MNI_NewAtlas \
+  /path/to/NewAtlas.nii.gz \
+  /path/to/source/atlases \
+  --labels-json /path/to/NewAtlas_labels.json \
+  --canonicalization deterministic
+```
+
+Use `--canonicalization none` when the label JSON already contains canonical
+names, synonyms, and laterality, or `openai` to use the consumer OpenAI API.
+Then convert the source directory into a self-contained Registry v2 bundle:
+
+```bash
+covale-migrate-registry \
+  /path/to/source/atlases \
+  /path/to/output/atlas_registry \
+  --space MNI152 \
+  --metadata /path/to/atlas_metadata.json
+```
+
 ## License
 
 COVALE is available under the [MIT License](LICENSE).

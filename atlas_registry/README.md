@@ -90,6 +90,61 @@ Expressions use stable IDs:
 Legacy `{"op": "region", "name": "left hippocampus"}` expressions remain
 supported when the name resolves exactly and unambiguously.
 
+## Onboard a new atlas
+
+Use `covale-onboard-atlas` to turn a raw integer-labeled NIfTI volume and label
+JSON into the canonical source layout consumed by the registry converter:
+
+```text
+<source-root>/<atlas-name>/
+├── <volume-stem>_canonical_names.json
+├── <volume-stem>_onboarding_report.json
+├── raw_labels/
+│   └── <original-label-file>.json
+└── volumes/
+    └── <original-volume>.nii.gz
+```
+
+For a label file that already contains canonical metadata, such as the
+NextBrain dictionary format, preserve it with `none`:
+
+```bash
+covale-onboard-atlas \
+  MNI_NextBrain \
+  /path/to/NextBrain_left_right_merged.nii.gz \
+  /path/to/source/atlases \
+  --labels-json /path/to/NextBrain_left_right_merged_labels.json \
+  --canonicalization none
+```
+
+For a simple `{label_id: label_name}` mapping, use deterministic
+canonicalization:
+
+```bash
+covale-onboard-atlas \
+  MNI_NewAtlas \
+  /path/to/NewAtlas.nii.gz \
+  /path/to/source/atlases \
+  --labels-json /path/to/NewAtlas_labels.json \
+  --canonicalization deterministic
+```
+
+Available canonicalization modes are:
+
+- `none`: retain existing canonical names, synonyms, laterality, confidence,
+  and rationale.
+- `deterministic` (default): normalize separators and case, extract laterality,
+  infer common structure types, and generate synonyms locally.
+- `openai`: canonicalize labels in validated chunks with the consumer OpenAI
+  API. Configure `OPENAI_API_KEY`; optionally pass `--model` and
+  `--chunk-size`.
+
+If `--labels-json` is omitted, COVALE generates a one-region label file only
+for a binary volume whose sole nonzero value is `1`. Multi-label atlases
+require a label JSON. Onboarding fails explicitly when JSON IDs and nonzero
+volume labels differ, inputs are malformed, or outputs already exist. Pass
+`--overwrite` only when replacement is intentional.
+
 ## Convert a MedPrimitives-style atlas directory
 
 The converter scans `*_canonical_names.json` files and NIfTI volumes, verifies
@@ -105,6 +160,10 @@ covale-migrate-registry \
   --resolution 1mm \
   --metadata /path/to/atlas_metadata.json
 ```
+
+The onboarding output root is the converter input root. This keeps raw atlas
+preparation separate from creation of the final self-contained Registry v2
+bundle.
 
 The optional metadata file maps source atlas names to provenance:
 
