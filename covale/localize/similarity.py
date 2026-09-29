@@ -1,13 +1,10 @@
-from pathlib import Path
-
 from covale.localize.openai_client import (
     OpenAIClient,
     create_client,
     request_json,
 )
 from covale.models import SimilarityResponse
-
-SIMILARITY_PROMPT = Path(__file__).parent / "prompts" / "similarity.txt"
+from covale.prompts import SIMILARITY_PROMPT
 
 
 def compare(
@@ -21,7 +18,7 @@ def compare(
     result = request_json(
         client,
         model=model,
-        instructions=SIMILARITY_PROMPT.read_text(encoding="utf-8"),
+        instructions=SIMILARITY_PROMPT,
         payload={
             "reference": reference,
             "candidate": candidate,

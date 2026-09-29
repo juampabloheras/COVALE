@@ -11,11 +11,11 @@ from typing import Any
 
 from covale import evaluate
 from covale.evaluate import DEFAULT_MODEL, CovaleMethod
-from covale.evaluator.report_processing.pipeline import (
+from covale.prompts import (
     COMPATIBILITY_PROMPT,
     EXTRACTION_PROMPT,
+    LOCALIZATION_PROMPT,
 )
-from covale.localize import LOCALIZATION_PROMPT
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
 from covale.models import (
@@ -40,6 +40,10 @@ def file_sha256(path: str | Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def text_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def git_commit(repository: str | Path) -> str | None:
@@ -205,12 +209,12 @@ def annotate_jsonl(
         "atlas_space": space,
         "registry": str(registry_path),
         "registry_sha256": registry_hash,
-        "localization_prompt_sha256": file_sha256(LOCALIZATION_PROMPT),
+        "localization_prompt_sha256": text_sha256(LOCALIZATION_PROMPT),
         "extraction_prompt_sha256": (
-            file_sha256(EXTRACTION_PROMPT) if extract_findings else None
+            text_sha256(EXTRACTION_PROMPT) if extract_findings else None
         ),
         "compatibility_prompt_sha256": (
-            file_sha256(COMPATIBILITY_PROMPT) if extract_findings else None
+            text_sha256(COMPATIBILITY_PROMPT) if extract_findings else None
         ),
         "extract_findings": extract_findings,
         "covale_version": version("covale"),

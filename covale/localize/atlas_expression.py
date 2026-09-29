@@ -6,11 +6,11 @@ from pydantic import ValidationError
 
 from covale.masks import AtlasMask, difference, intersection, load_mask, union
 from covale.models import AtlasRegistry, validate_expression
+from covale.prompts import LOCALIZATION_PROMPT
 
 DEFAULT_REGISTRY = (
     Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
 )
-LOCALIZATION_PROMPT = Path(__file__).parent / "prompts" / "localize.txt"
 Expression = Mapping[str, Any]
 ExpressionBuilder = Callable[[str, Mapping[str, Any]], Expression]
 

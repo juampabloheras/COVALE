@@ -31,7 +31,7 @@ def create_agent(model: str = "gpt-6-astra") -> DeepAgent:
         return create_deep_agent(
             model=provider_model,
             tools=[],
-            system_prompt=LOCALIZATION_PROMPT.read_text(encoding="utf-8"),
+            system_prompt=LOCALIZATION_PROMPT,
         )
     except (OpenAIError, RuntimeError) as error:
         raise ProviderError(f"Could not initialize Deep Agent: {error}") from error

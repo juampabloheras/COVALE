@@ -24,7 +24,7 @@ def build_expression(
     expression = request_json(
         client,
         model=model,
-        instructions=LOCALIZATION_PROMPT.read_text(encoding="utf-8"),
+        instructions=LOCALIZATION_PROMPT,
         payload={
             "anatomical_description": text,
             "atlas_registry": dict(registry),

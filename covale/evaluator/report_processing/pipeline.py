@@ -1,16 +1,15 @@
-from pathlib import Path
 from pydantic import Field, ValidationError
 
+from covale.prompts.report_processing import (
+    COMPATIBILITY_PROMPT,
+    EXTRACTION_PROMPT,
+)
 from covale.localize.openai_client import (
     ModelResponseError,
     OpenAIClient,
     request_json,
 )
 from covale.models import AnatomicalUnit, ReportFinding, StrictModel
-
-PROMPTS = Path(__file__).parent / "prompts"
-EXTRACTION_PROMPT = PROMPTS / "extract.txt"
-COMPATIBILITY_PROMPT = PROMPTS / "compatibility.txt"
 
 
 class FindingExtraction(StrictModel):
@@ -26,13 +25,6 @@ class CompatibilityResult(StrictModel):
     compatible_pairs: list[CompatiblePair]
 
 
-def _prompt(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise RuntimeError(f"Could not read prompt: {path}") from error
-
-
 def extract_anatomical_units(
     report: str,
     *,
@@ -44,7 +36,7 @@ def extract_anatomical_units(
     response = request_json(
         client,
         model=model,
-        instructions=_prompt(EXTRACTION_PROMPT),
+        instructions=EXTRACTION_PROMPT,
         payload={"report": report},
     )
     try:
@@ -69,7 +61,7 @@ def compatible_unit_pairs(
     response = request_json(
         client,
         model=model,
-        instructions=_prompt(COMPATIBILITY_PROMPT),
+        instructions=COMPATIBILITY_PROMPT,
         payload={
             "reference_findings": [
                 unit.model_dump() for unit in references
