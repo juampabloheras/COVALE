@@ -1,0 +1,10 @@
+{
+  "id": "onboarding-example",
+  "name": "Synthetic onboarding example",
+  "role": "anatomical",
+  "priority": 100,
+  "source_url": "https://example.org/covale-synthetic-atlas",
+  "version": "1.0",
+  "citation": "Synthetic COVALE example; not for scientific use.",
+  "license": "MIT"
+}

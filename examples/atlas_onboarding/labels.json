@@ -1,0 +1,10 @@
+{
+  "1": {
+    "id": "onboarding-example:left-hippocampus",
+    "label": "left hippocampus"
+  },
+  "2": {
+    "id": "onboarding-example:right-hippocampus",
+    "label": "right hippocampus"
+  }
+}

@@ -251,45 +251,41 @@ print(timing)
 
 ## Onboarding a new atlas
 
-Use `covale-onboard-atlas` to validate a labeled NIfTI volume, standardize its
-label ontology, and copy the resulting resources under the atlas registry:
+Put the atlas metadata, labels, license, and one labeled NIfTI volume in a
+single directory:
 
-For example, if `NewAtlas.nii.gz` uses `0` for background, `1` for the left
-hippocampus, and `2` for the right hippocampus, create `NewAtlas_labels.json`:
-
-```json
-{
-  "1": "left hippocampus",
-  "2": "right hippocampus"
-}
+```text
+NewAtlas/
+├── atlas.json
+├── labels.json
+├── LICENSE.txt
+└── NewAtlas.nii.gz
 ```
 
-Then run:
+`atlas.json` contains the atlas ID, name, license identifier, citation, source
+URL, version, role, and priority. `labels.json` maps integer voxel values to
+labels and may provide stable region IDs. See the runnable example in
+[`examples/atlas_onboarding`](examples/atlas_onboarding).
+
+Run one command:
 
 ```bash
-covale-onboard-atlas \
-  MNI_NewAtlas \
-  NewAtlas.nii.gz \
-  atlas_registry/atlases \
-  --labels-json NewAtlas_labels.json \
-  --canonicalization deterministic
+covale-onboard-atlas examples/atlas_onboarding
 ```
 
-This creates
-`atlas_registry/atlases/MNI_NewAtlas/NewAtlas_canonical_names.json`, copies the
-original label file under `raw_labels/`, and copies the volume under
-`volumes/`.
+The command validates the files and voxel labels, canonicalizes the ontology,
+copies the bundle under `atlas_registry/atlases/`, and updates
+`atlas_registry/registry.json`.
 
-Use `--canonicalization none` when the label JSON already contains canonical
-names, synonyms, and laterality, or `openai` to use the consumer OpenAI API.
-For a binary mask whose only nonzero label is `1`, `--labels-json` may be
-omitted.
+| Mode | Use when | Behavior |
+|---|---|---|
+| `deterministic` | Labels are simple names | Normalizes names, extracts laterality, infers common structure types, and creates synonyms locally |
+| `none` | Labels already contain canonical metadata | Preserves canonical names, synonyms, laterality, confidence, and rationale |
+| `openai` | Labels need richer interpretation | Uses the consumer OpenAI API in validated chunks |
 
-After onboarding, add the new volume and canonical regions to
-`atlas_registry/registry.json`, including the atlas license, citation, source
-URL, and stable region IDs. See
-[atlas_registry/README.md](atlas_registry/README.md) for the expected output
-layout, canonicalization modes, and registry fields.
+Select a mode with `--canonicalization MODE`. See
+[atlas_registry/README.md](atlas_registry/README.md) for the complete file
+formats and validation rules.
 
 ## License
 

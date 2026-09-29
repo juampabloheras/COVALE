@@ -89,65 +89,93 @@ supported when the name resolves exactly and unambiguously.
 
 ## Onboarding a new atlas
 
-Use `covale-onboard-atlas` to turn a raw integer-labeled NIfTI volume and label
-JSON into the canonical atlas layout:
+Create one self-contained source directory:
 
 ```text
-atlas_registry/atlases/<atlas-name>/
-├── <volume-stem>_canonical_names.json
-├── <volume-stem>_onboarding_report.json
-├── raw_labels/
-│   └── <original-label-file>.json
-└── volumes/
-    └── <original-volume>.nii.gz
+NewAtlas/
+├── atlas.json
+├── labels.json
+├── LICENSE.txt
+└── NewAtlas.nii.gz
 ```
 
-For a label file that already contains canonical metadata, such as the
-NextBrain dictionary format, preserve it with `none`:
+The directory must contain exactly one `.nii` or `.nii.gz` volume.
+
+### `atlas.json`
+
+```json
+{
+  "id": "new-atlas",
+  "name": "New Atlas",
+  "role": "anatomical",
+  "priority": 100,
+  "source_url": "https://example.org/new-atlas",
+  "version": "1.0",
+  "citation": "Author et al.",
+  "license": "CC-BY-4.0"
+}
+```
+
+The `license` field is the license identifier recorded in the registry.
+`LICENSE.txt` contains the corresponding license text.
+
+### `labels.json`
+
+Keys are positive integer voxel values. Each value can be a plain label or an
+object containing a label and stable ID:
+
+```json
+{
+  "1": {
+    "id": "new-atlas:left-hippocampus",
+    "label": "left hippocampus"
+  },
+  "2": {
+    "id": "new-atlas:right-hippocampus",
+    "label": "right hippocampus"
+  }
+}
+```
+
+Stable IDs must begin with the atlas ID followed by `:`. If `id` is omitted,
+COVALE generates `<atlas-id>:<voxel-value>`. Existing canonical fields such as
+`canonical_name`, `synonyms`, `laterality`, `parent_anatomy`, `structure_type`,
+`confidence`, and `rationale` are also accepted.
+
+### Run onboarding
+
+The repository includes a complete synthetic example under
+[`examples/atlas_onboarding`](../examples/atlas_onboarding):
 
 ```bash
-covale-onboard-atlas \
-  MNI_NextBrain \
-  /path/to/NextBrain_left_right_merged.nii.gz \
-  atlas_registry/atlases \
-  --labels-json /path/to/NextBrain_left_right_merged_labels.json \
-  --canonicalization none
+covale-onboard-atlas examples/atlas_onboarding
 ```
 
-For a simple `{label_id: label_name}` mapping, use deterministic
-canonicalization:
+This single command:
+
+1. Validates `atlas.json`, `labels.json`, `LICENSE.txt`, and the NIfTI volume.
+2. Requires exact agreement between JSON keys and nonzero voxel labels.
+3. Canonicalizes every label.
+4. Copies the source files and canonical ontology under
+   `atlas_registry/atlases/<directory-name>/`.
+5. Adds the atlas and stable region IDs to `atlas_registry/registry.json`.
+
+| Mode | Use when | Behavior |
+|---|---|---|
+| `deterministic` | Labels are simple names | Normalizes separators and case, extracts laterality, infers common structure types, and creates synonyms locally |
+| `none` | Labels already contain curated canonical fields | Preserves names, synonyms, laterality, structure types, confidence, and rationale |
+| `openai` | Labels need richer anatomical interpretation | Uses the consumer OpenAI API in validated chunks; requires `OPENAI_API_KEY` |
+
+Select the mode with:
 
 ```bash
-covale-onboard-atlas \
-  MNI_NewAtlas \
-  /path/to/NewAtlas.nii.gz \
-  atlas_registry/atlases \
-  --labels-json /path/to/NewAtlas_labels.json \
-  --canonicalization deterministic
+covale-onboard-atlas NewAtlas --canonicalization none
 ```
 
-Available canonicalization modes are:
+Use `--model` and `--chunk-size` with `openai`. Use `--registry` when the
+registry is not at `atlas_registry/registry.json`. Onboarding refuses to
+replace existing files, atlas IDs, or stable region IDs unless `--overwrite`
+is supplied.
 
-- `none`: retain existing canonical names, synonyms, laterality, confidence,
-  and rationale.
-- `deterministic` (default): normalize separators and case, extract laterality,
-  infer common structure types, and generate synonyms locally.
-- `openai`: canonicalize labels in validated chunks with the consumer OpenAI
-  API. Configure `OPENAI_API_KEY`; optionally pass `--model` and
-  `--chunk-size`.
-
-If `--labels-json` is omitted, COVALE generates a one-region label file only
-for a binary volume whose sole nonzero value is `1`. Multi-label atlases
-require a label JSON. Onboarding fails explicitly when JSON IDs and nonzero
-volume labels differ, inputs are malformed, or outputs already exist. Pass
-`--overwrite` only when replacement is intentional.
-
-After onboarding:
-
-1. Add the copied volume to the `atlases` object in `registry.json`.
-2. Add each canonical region with a stable ID and a `labels` source pointing
-   to the atlas ID and integer label value.
-3. Copy license, citation, source URL, version, and priority metadata into the
-   atlas definition.
-4. Load the registry and test representative exact, synonym, and lateralized
-   queries before using it for evaluation.
+The registry and output assets must share a directory tree so all volume paths
+remain contained within the registry directory.
