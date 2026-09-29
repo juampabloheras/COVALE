@@ -17,7 +17,7 @@ def _inside(root: Path, relative_path: str) -> Path:
     return path
 
 
-def _sha256(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -44,6 +44,13 @@ def _load_image(
     return image, data
 
 
+def load_label_volume(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    image, data = _load_image(path, require_3d=True)
+    if np.any(data < 0) or not np.equal(data, np.rint(data)).all():
+        raise ValueError(f"Atlas '{path}' must contain nonnegative integer labels.")
+    return data.astype(np.int64, copy=False), np.asarray(image.affine)
+
+
 def _load_label_volume(
     registry: RegistryV2,
     root: Path,
@@ -54,14 +61,9 @@ def _load_label_volume(
         return cache[atlas_id]
     atlas = registry.atlases[atlas_id]
     path = _inside(root, atlas.volume)
-    if atlas.sha256 is not None and _sha256(path) != atlas.sha256:
+    if atlas.sha256 is not None and sha256_file(path) != atlas.sha256:
         raise ValueError(f"Atlas checksum does not match registry: {atlas_id}")
-    image, data = _load_image(path, require_3d=True)
-    if np.any(data < 0) or not np.equal(data, np.rint(data)).all():
-        raise ValueError(
-            f"Atlas '{atlas_id}' must contain nonnegative integer labels."
-        )
-    loaded = (data.astype(np.int64, copy=False), np.asarray(image.affine))
+    loaded = load_label_volume(path)
     cache[atlas_id] = loaded
     return loaded
 

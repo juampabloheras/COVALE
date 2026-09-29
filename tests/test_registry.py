@@ -8,6 +8,7 @@ import pytest
 from covale.localize import LocalizationError, execute_expression
 from covale.localize.openai_client import ModelResponseError
 from covale.registry import Registry, RegistryError, RegistryResolver
+from covale.registry.migrate import MigrationError, migrate_registry
 
 
 def write_registry(path: Path, payload: dict[str, object]) -> Path:
@@ -75,9 +76,7 @@ def registry_v2() -> dict[str, object]:
 
 
 def test_loads_registry_v2_and_searches_synonyms(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
 
     matches = registry.search("left ACA")
 
@@ -87,9 +86,7 @@ def test_loads_registry_v2_and_searches_synonyms(tmp_path: Path) -> None:
 
 
 def test_search_preserves_laterality(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
 
     matches = registry.search("left hippocampus")
 
@@ -98,9 +95,7 @@ def test_search_preserves_laterality(tmp_path: Path) -> None:
 
 
 def test_bare_name_can_return_both_lateralities(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
 
     matches = registry.search("hippocampus")
 
@@ -113,9 +108,7 @@ def test_bare_name_can_return_both_lateralities(tmp_path: Path) -> None:
 def test_bilateral_query_includes_unilateral_components(
     tmp_path: Path,
 ) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
 
     matches = registry.search("bilateral hippocampi")
 
@@ -127,9 +120,7 @@ def test_bilateral_query_includes_unilateral_components(
 
 
 def test_search_supports_structured_filters(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
 
     matches = registry.search(
         "hippocampus",
@@ -173,9 +164,7 @@ def test_rejects_unknown_atlas_reference(tmp_path: Path) -> None:
 
 
 def test_compact_catalog_contains_stable_ids(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
 
     catalog = registry.compact_catalog("left ACA", limit=1)
 
@@ -210,9 +199,7 @@ class FakeClient:
 
 
 def test_resolver_exact_synonym_bypasses_openai(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
     client = FakeClient()
 
     expression = RegistryResolver(
@@ -228,9 +215,7 @@ def test_resolver_exact_synonym_bypasses_openai(tmp_path: Path) -> None:
 def test_resolver_uses_compact_candidates_for_composition(
     tmp_path: Path,
 ) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
     client = FakeClient(
         {
             "op": "union",
@@ -259,9 +244,7 @@ def test_resolver_uses_compact_candidates_for_composition(
 
 
 def test_resolver_rejects_id_outside_candidates(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
     client = FakeClient({"op": "region", "id": "unknown:1"})
 
     with pytest.raises(ModelResponseError, match="outside candidate catalog"):
@@ -273,9 +256,7 @@ def test_resolver_rejects_id_outside_candidates(tmp_path: Path) -> None:
 
 
 def test_resolver_rejects_conflicting_laterality(tmp_path: Path) -> None:
-    registry = Registry.load(
-        write_registry(tmp_path / "registry.json", registry_v2())
-    )
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
     client = FakeClient(
         {"op": "region", "id": "anatomical:53"},
     )
@@ -362,3 +343,105 @@ def test_rejects_atlas_path_outside_registry(tmp_path: Path) -> None:
             {"op": "region", "id": "arterial:1"},
             path,
         )
+
+
+def write_migration_source(
+    tmp_path: Path,
+    *,
+    region_id: int = 1,
+) -> Path:
+    source = tmp_path / "source"
+    atlas = source / "MNI_TestAtlas"
+    volumes = atlas / "volumes"
+    volumes.mkdir(parents=True)
+    nib.save(
+        nib.Nifti1Image(
+            np.array([0, 1, 2], dtype=np.int16).reshape(3, 1, 1),
+            np.eye(4),
+        ),
+        volumes / "TestAtlas.nii.gz",
+    )
+    (atlas / "TestAtlas_canonical_names.json").write_text(
+        json.dumps(
+            [
+                {
+                    "region_id": region_id,
+                    "source_label": "hippocampus left",
+                    "canonical_name": "hippocampus",
+                    "parent_anatomy": "temporal lobe",
+                    "laterality": "left",
+                    "structure_type": "subcortical_nucleus",
+                    "is_abnormality": False,
+                    "synonyms": ["left hippocampal formation"],
+                    "confidence": 0.99,
+                    "rationale": "Canonical test record.",
+                    "atlas_sources": ["TestAtlas"],
+                    "preferred_atlas": "TestAtlas",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return source
+
+
+def test_migrates_canonical_atlas_bundle(tmp_path: Path) -> None:
+    source = write_migration_source(tmp_path)
+    metadata = tmp_path / "metadata.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "TestAtlas": {
+                    "name": "Test Atlas",
+                    "license": "CC-BY-4.0",
+                    "citation": "Example et al.",
+                    "role": "anatomical",
+                    "priority": 5,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "output"
+
+    report = migrate_registry(
+        source,
+        output,
+        space="MNI152",
+        resolution="1mm",
+        metadata_path=metadata,
+    )
+
+    assert report.atlas_count == 1
+    assert report.region_count == 1
+    assert report.warnings == []
+    registry = Registry.load(output / "registry.json")
+    region = registry.model.regions["testatlas:1"]
+    assert region.display_name == "left hippocampus"
+    assert region.parent_anatomy == "temporal lobe"
+    assert region.synonyms == ["left hippocampal formation"]
+    assert registry.model.atlases["testatlas"].license == "CC-BY-4.0"
+    assert (output / "migration_report.json").is_file()
+    result = execute_expression(
+        {"op": "region", "id": "testatlas:1"},
+        output / "registry.json",
+    )
+    np.testing.assert_array_equal(result.data.ravel(), [False, True, False])
+
+
+def test_migration_reports_missing_provenance(tmp_path: Path) -> None:
+    source = write_migration_source(tmp_path)
+
+    report = migrate_registry(source, tmp_path / "output", space="MNI152")
+
+    assert report.warnings == [
+        "Atlas 'testatlas' has no license metadata.",
+        "Atlas 'testatlas' has no citation metadata.",
+    ]
+
+
+def test_migration_rejects_missing_volume_label(tmp_path: Path) -> None:
+    source = write_migration_source(tmp_path, region_id=99)
+
+    with pytest.raises(MigrationError, match="missing from atlas"):
+        migrate_registry(source, tmp_path / "output", space="MNI152")
