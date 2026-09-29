@@ -90,10 +90,6 @@ results = report_evaluator(
 )
 ```
 
-COVALE extracts anatomically localized findings, aligns compatible findings
-one to one, evaluates each matched location, and gives no credit for missing
-or extra findings. Location strings remain the default and skip finding
-extraction.
 
 ### Inspect detailed results
 
