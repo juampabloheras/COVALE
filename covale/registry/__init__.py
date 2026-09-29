@@ -1,0 +1,29 @@
+from covale.registry.load import (
+    Registry,
+    RegistryError,
+    normalize_term,
+    query_laterality,
+)
+from covale.registry.models import (
+    AtlasDefinition,
+    AtlasSpace,
+    LabelSource,
+    MaskSource,
+    RegionDefinition,
+    RegionMatch,
+    RegistryV2,
+)
+
+__all__ = [
+    "AtlasDefinition",
+    "AtlasSpace",
+    "LabelSource",
+    "MaskSource",
+    "RegionDefinition",
+    "RegionMatch",
+    "Registry",
+    "RegistryError",
+    "RegistryV2",
+    "normalize_term",
+    "query_laterality",
+]
