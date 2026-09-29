@@ -1,8 +1,7 @@
-# Atlas Registry v2
+# Atlas registry
 
-COVALE Registry v2 separates anatomical ontology metadata from atlas storage.
-It supports both one-file-per-mask resources and integer-labeled atlas volumes.
-The included example atlas is synthetic and exists only to demonstrate the
+COVALE supports integer-labeled atlas volumes and one-file-per-region binary
+masks. The included atlas is synthetic and exists only to demonstrate the
 format; replace it before scientific use.
 
 ## Requirements
@@ -25,7 +24,7 @@ format; replace it before scientific use.
   "atlases": {
     "anatomical": {
       "name": "Anatomical Atlas",
-      "volume": "atlases/anatomical.nii.gz",
+      "volume": "atlases/MNI_Anatomical/volumes/anatomical.nii.gz",
       "role": "anatomical",
       "priority": 10,
       "source_url": "https://example.org/atlas",
@@ -64,8 +63,6 @@ For a binary mask, replace the label source with:
 {"type": "mask", "path": "masks/left-hippocampus.nii.gz"}
 ```
 
-Registry v1 files remain loadable and are converted to v2 in memory.
-
 ## Search and resolution
 
 Deterministic search considers stable IDs, display and canonical names, source
@@ -90,13 +87,13 @@ Expressions use stable IDs:
 Legacy `{"op": "region", "name": "left hippocampus"}` expressions remain
 supported when the name resolves exactly and unambiguously.
 
-## Onboard a new atlas
+## Onboarding a new atlas
 
 Use `covale-onboard-atlas` to turn a raw integer-labeled NIfTI volume and label
-JSON into the canonical source layout consumed by the registry converter:
+JSON into the canonical atlas layout:
 
 ```text
-<source-root>/<atlas-name>/
+atlas_registry/atlases/<atlas-name>/
 ├── <volume-stem>_canonical_names.json
 ├── <volume-stem>_onboarding_report.json
 ├── raw_labels/
@@ -112,7 +109,7 @@ NextBrain dictionary format, preserve it with `none`:
 covale-onboard-atlas \
   MNI_NextBrain \
   /path/to/NextBrain_left_right_merged.nii.gz \
-  /path/to/source/atlases \
+  atlas_registry/atlases \
   --labels-json /path/to/NextBrain_left_right_merged_labels.json \
   --canonicalization none
 ```
@@ -124,7 +121,7 @@ canonicalization:
 covale-onboard-atlas \
   MNI_NewAtlas \
   /path/to/NewAtlas.nii.gz \
-  /path/to/source/atlases \
+  atlas_registry/atlases \
   --labels-json /path/to/NewAtlas_labels.json \
   --canonicalization deterministic
 ```
@@ -145,42 +142,12 @@ require a label JSON. Onboarding fails explicitly when JSON IDs and nonzero
 volume labels differ, inputs are malformed, or outputs already exist. Pass
 `--overwrite` only when replacement is intentional.
 
-## Convert a MedPrimitives-style atlas directory
+After onboarding:
 
-The converter scans `*_canonical_names.json` files and NIfTI volumes, verifies
-3D integer labels and affines, preserves ontology metadata and synonyms,
-creates stable IDs, copies assets into a self-contained registry bundle, and
-writes `migration_report.json`.
-
-```bash
-covale-migrate-registry \
-  /path/to/source/atlases \
-  /path/to/output/atlas_registry \
-  --space MNI152 \
-  --resolution 1mm \
-  --metadata /path/to/atlas_metadata.json
-```
-
-The onboarding output root is the converter input root. This keeps raw atlas
-preparation separate from creation of the final self-contained Registry v2
-bundle.
-
-The optional metadata file maps source atlas names to provenance:
-
-```json
-{
-  "AnatomicalAtlas": {
-    "name": "Anatomical Atlas",
-    "role": "anatomical",
-    "priority": 10,
-    "source_url": "https://example.org/atlas",
-    "version": "1.0",
-    "citation": "Author et al.",
-    "license": "CC-BY-4.0"
-  }
-}
-```
-
-The report explicitly warns about missing licenses and citations. Review those
-warnings before distributing the generated bundle. Use `--overwrite` only
-when intentionally replacing an existing migration.
+1. Add the copied volume to the `atlases` object in `registry.json`.
+2. Add each canonical region with a stable ID and a `labels` source pointing
+   to the atlas ID and integer label value.
+3. Copy license, citation, source URL, version, and priority metadata into the
+   atlas definition.
+4. Load the registry and test representative exact, synonym, and lateralized
+   queries before using it for evaluation.

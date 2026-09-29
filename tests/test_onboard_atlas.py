@@ -5,8 +5,6 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from covale.registry import Registry
-from covale.registry.migrate import migrate_registry
 from covale.utils.onboard_atlas import (
     AtlasOnboardingError,
     onboard_atlas,
@@ -188,29 +186,3 @@ def test_openai_canonicalization_preserves_source_label(tmp_path: Path) -> None:
     canonical = json.loads(Path(result.canonical_json).read_text(encoding="utf-8"))
     assert canonical[0]["source_label"] == "ctx-lh-test"
     assert client.responses.requests[0]["model"] == "test-model"
-
-
-def test_onboarding_output_migrates_to_registry_v2(tmp_path: Path) -> None:
-    volume = write_volume(tmp_path / "anatomical.nii.gz", [0, 1])
-    labels = tmp_path / "labels.json"
-    labels.write_text(
-        json.dumps({"1": "left hippocampus"}),
-        encoding="utf-8",
-    )
-    source_root = tmp_path / "sources"
-    onboard_atlas(
-        "MNI_Anatomical",
-        volume,
-        source_root,
-        labels_json=labels,
-    )
-
-    report = migrate_registry(
-        source_root,
-        tmp_path / "registry",
-        space="MNI152",
-    )
-
-    registry = Registry.load(tmp_path / "registry" / "registry.json")
-    assert report.region_count == 1
-    assert registry.search("left hippocampus")[0].region_id == "anatomical:1"

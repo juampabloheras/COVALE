@@ -22,7 +22,7 @@ candidate text -> localization -> atlas ROI --/
 - [Compare systems](#compare-systems)
 - [Config file](#config-file)
 - [RL rewards](#rl-rewards)
-- [Atlas Registry v2](#atlas-registry-v2)
+- [Onboarding a new atlas](#onboarding-a-new-atlas)
 - [License](#license)
 
 
@@ -249,41 +249,30 @@ timing = benchmark_reward(
 print(timing)
 ```
 
-## Atlas Registry v2
+## Onboarding a new atlas
 
-Registry v2 supports stable region IDs, synonyms and source labels,
-laterality-aware search, ontology metadata, binary masks, and labeled atlas
-volumes. Exact aliases resolve deterministically without an OpenAI call;
-ambiguous and compositional descriptions use a compact ranked candidate list.
-
-The repository includes a tiny synthetic registry that demonstrates the
-format. It is not a scientific atlas. See
-[atlas_registry/README.md](atlas_registry/README.md) for the full schema,
-stable-ID expressions, provenance requirements, and the
-`covale-migrate-registry` converter.
-
-To onboard a new labeled atlas, first create a canonical source directory:
+Use `covale-onboard-atlas` to validate a labeled NIfTI volume, standardize its
+label ontology, and copy the resulting resources under the atlas registry:
 
 ```bash
 covale-onboard-atlas \
   MNI_NewAtlas \
   /path/to/NewAtlas.nii.gz \
-  /path/to/source/atlases \
+  atlas_registry/atlases \
   --labels-json /path/to/NewAtlas_labels.json \
   --canonicalization deterministic
 ```
 
 Use `--canonicalization none` when the label JSON already contains canonical
 names, synonyms, and laterality, or `openai` to use the consumer OpenAI API.
-Then convert the source directory into a self-contained Registry v2 bundle:
+For a binary mask whose only nonzero label is `1`, `--labels-json` may be
+omitted.
 
-```bash
-covale-migrate-registry \
-  /path/to/source/atlases \
-  /path/to/output/atlas_registry \
-  --space MNI152 \
-  --metadata /path/to/atlas_metadata.json
-```
+After onboarding, add the new volume and canonical regions to
+`atlas_registry/registry.json`, including the atlas license, citation, source
+URL, and stable region IDs. See
+[atlas_registry/README.md](atlas_registry/README.md) for the expected output
+layout, canonicalization modes, and registry fields.
 
 ## License
 
