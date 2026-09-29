@@ -11,8 +11,8 @@ def test_covale_callable_returns_corpus_mean(monkeypatch) -> None:
             "diagnostics": {"resolved": True},
         }
 
-    monkeypatch.setattr("covale.evaluator.evaluate_pair", score)
-    monkeypatch.setattr("covale.evaluator.create_client", object)
+    monkeypatch.setattr("covale.evaluator.core.evaluate_pair", score)
+    monkeypatch.setattr("covale.evaluator.core.create_client", object)
     evaluator = COVALE(method="similarity")
 
     first = evaluator(
@@ -31,13 +31,13 @@ def test_covale_callable_returns_corpus_mean(monkeypatch) -> None:
 
 def test_covale_callable_can_return_per_sample_scores(monkeypatch) -> None:
     monkeypatch.setattr(
-        "covale.evaluator.evaluate_pair",
+        "covale.evaluator.core.evaluate_pair",
         lambda *args, **kwargs: {
             "score": 0.25,
             "diagnostics": {"resolved": True},
         },
     )
-    monkeypatch.setattr("covale.evaluator.create_client", object)
+    monkeypatch.setattr("covale.evaluator.core.create_client", object)
     evaluator = COVALE(method="similarity", per_sample=True)
 
     assert evaluator(["a", "b"], ["c", "d"]) == {
@@ -67,13 +67,13 @@ concurrency: 2
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "covale.evaluator.evaluate_pair",
+        "covale.evaluator.core.evaluate_pair",
         lambda *args, **kwargs: {
             "score": 0.5,
             "diagnostics": {"resolved": True},
         },
     )
-    monkeypatch.setattr("covale.evaluator.create_client", object)
+    monkeypatch.setattr("covale.evaluator.core.create_client", object)
 
     evaluator = COVALE.from_config(config)
     result = evaluator(["a", "b"], ["c", "d"])
@@ -161,8 +161,8 @@ def test_detailed_output_can_record_unresolved_pairs(monkeypatch) -> None:
             "diagnostics": {"resolved": True},
         }
 
-    monkeypatch.setattr("covale.evaluator.evaluate_pair", evaluate)
-    monkeypatch.setattr("covale.evaluator.create_client", object)
+    monkeypatch.setattr("covale.evaluator.core.evaluate_pair", evaluate)
+    monkeypatch.setattr("covale.evaluator.core.create_client", object)
     evaluator = COVALE(
         method="similarity",
         output_mode="detailed",

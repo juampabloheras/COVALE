@@ -11,6 +11,10 @@ from typing import Any
 
 from covale import evaluate
 from covale.evaluate import DEFAULT_MODEL, CovaleMethod
+from covale.evaluator.report_processing.pipeline import (
+    COMPATIBILITY_PROMPT,
+    EXTRACTION_PROMPT,
+)
 from covale.localize import LOCALIZATION_PROMPT
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
@@ -59,6 +63,7 @@ def annotate_jsonl(
     registry_path: str | Path = "atlas_registry/registry.json",
     overwrite: bool = False,
     concurrency: int = 1,
+    extract_findings: bool = False,
     summary_path: str | Path | None = None,
     client: OpenAIClient | None = None,
     agent: DeepAgent | None = None,
@@ -86,7 +91,7 @@ def annotate_jsonl(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     started = perf_counter()
-    if method in {"llm", "similarity"} and client is None:
+    if (extract_findings or method in {"llm", "similarity"}) and client is None:
         client = create_client()
     if method == "deep_agent" and agent is None:
         agent = create_agent(model)
@@ -115,6 +120,7 @@ def annotate_jsonl(
                 registry_path,
                 method=method,
                 model=model,
+                extract_findings=extract_findings,
                 client=client,
                 agent=agent,
             )
@@ -200,6 +206,13 @@ def annotate_jsonl(
         "registry": str(registry_path),
         "registry_sha256": registry_hash,
         "localization_prompt_sha256": file_sha256(LOCALIZATION_PROMPT),
+        "extraction_prompt_sha256": (
+            file_sha256(EXTRACTION_PROMPT) if extract_findings else None
+        ),
+        "compatibility_prompt_sha256": (
+            file_sha256(COMPATIBILITY_PROMPT) if extract_findings else None
+        ),
+        "extract_findings": extract_findings,
         "covale_version": version("covale"),
         "git_commit": git_commit(repository),
         "python_version": platform.python_version(),
@@ -237,6 +250,7 @@ def parse_args() -> argparse.Namespace:
         default=Path("atlas_registry/registry.json"),
     )
     parser.add_argument("--concurrency", type=int, default=1)
+    parser.add_argument("--extract-findings", action="store_true")
     parser.add_argument("--summary", type=Path)
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -251,6 +265,7 @@ def main() -> int:
         model=args.model,
         registry_path=args.registry,
         concurrency=args.concurrency,
+        extract_findings=args.extract_findings,
         summary_path=args.summary,
         overwrite=args.overwrite,
     )

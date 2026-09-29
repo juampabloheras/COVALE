@@ -15,7 +15,9 @@ uv run python benchmark/run.py \
 Available methods are `llm`, `deep_agent`, and `similarity`. Use `--model` to
 override `gpt-6-astra`, `--registry` to select an atlas registry,
 `--concurrency` for bounded ordered execution, `--summary` for a custom
-summary path, and `--overwrite` to replace existing output.
+summary path, and `--overwrite` to replace existing output. Pass
+`--extract-findings` when each reference and candidate is a report rather
+than an anatomical location.
 
 Successful rows receive:
 
@@ -40,4 +42,4 @@ created once and reused for every row.
 
 The default sidecar path is `<output>.summary.json`. It records SHA-256 hashes
 for inputs, outputs, registry, and prompt; package/Python versions; Git commit;
-atlas metadata; counts; concurrency; and timing.
+atlas metadata; finding-extraction settings; counts; concurrency; and timing.

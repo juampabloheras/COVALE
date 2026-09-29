@@ -69,6 +69,33 @@ class Pair(BaseModel):
     candidate: str = Field(min_length=1)
 
 
+class AnatomicalUnit(StrictModel):
+    text: str = Field(min_length=1)
+    anatomy: str = Field(min_length=1)
+    concept: str | None = None
+    assertion: Literal["present", "absent", "uncertain"] | None = None
+
+
+class ReportFinding(AnatomicalUnit):
+    concept: str = Field(min_length=1)
+    assertion: Literal["present", "absent", "uncertain"]
+
+
+class UnitMatch(StrictModel):
+    reference_index: int = Field(ge=0)
+    candidate_index: int = Field(ge=0)
+    reference: AnatomicalUnit
+    candidate: AnatomicalUnit
+    score: float = Field(ge=0, le=1)
+    diagnostics: dict[str, Any]
+
+
+class Alignment(StrictModel):
+    matches: list[UnitMatch]
+    missing: list[AnatomicalUnit]
+    spurious: list[AnatomicalUnit]
+
+
 class SimilarityResponse(StrictModel):
     score: float = Field(ge=0, le=1)
 
@@ -139,6 +166,15 @@ class BenchmarkSummary(StrictModel):
         pattern=r"^[a-f0-9]{64}$",
     )
     localization_prompt_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    extraction_prompt_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[a-f0-9]{64}$",
+    )
+    compatibility_prompt_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[a-f0-9]{64}$",
+    )
+    extract_findings: bool
     covale_version: str
     git_commit: str | None
     python_version: str
@@ -178,6 +214,7 @@ class OutputSettings(StrictModel):
 
 class EvaluatorConfig(StrictModel):
     metrics: list[MetricEntry] = Field(min_length=1, max_length=1)
+    extract_findings: bool = False
     output: OutputSettings = Field(default_factory=OutputSettings)
     cache: bool = True
     concurrency: int = Field(default=1, ge=1)

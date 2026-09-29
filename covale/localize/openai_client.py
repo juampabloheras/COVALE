@@ -25,8 +25,8 @@ def create_client() -> OpenAIClient:
         from openai import OpenAI, OpenAIError
     except ImportError as error:
         raise ProviderError(
-            "OpenAI support requires the 'openai' extra: "
-            "pip install 'covale[openai]'"
+            "OpenAI is a core COVALE dependency. Reinstall COVALE to "
+            "restore the provider."
         ) from error
 
     load_dotenv()
@@ -47,8 +47,8 @@ def request_json(
         from openai import OpenAIError
     except ImportError as error:
         raise ProviderError(
-            "OpenAI support requires the 'openai' extra: "
-            "pip install 'covale[openai]'"
+            "OpenAI is a core COVALE dependency. Reinstall COVALE to "
+            "restore the provider."
         ) from error
 
     try:

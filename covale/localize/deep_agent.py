@@ -21,8 +21,8 @@ def create_agent(model: str = "gpt-6-astra") -> DeepAgent:
         from openai import OpenAIError
     except ImportError as error:
         raise ProviderError(
-            "Deep Agents support requires the 'agents' extra: "
-            "pip install 'covale[agents]'"
+            "Deep Agents is a core COVALE dependency. Reinstall COVALE to "
+            "restore the provider."
         ) from error
 
     load_dotenv()
@@ -89,8 +89,8 @@ def build_expression(
         from openai import OpenAIError
     except ImportError as error:
         raise ProviderError(
-            "Deep Agents support requires the 'agents' extra: "
-            "pip install 'covale[agents]'"
+            "Deep Agents is a core COVALE dependency. Reinstall COVALE to "
+            "restore the provider."
         ) from error
 
     try:

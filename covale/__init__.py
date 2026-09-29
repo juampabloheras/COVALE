@@ -1,6 +1,5 @@
 from covale.comparison import compare_systems
-from covale.evaluate import covale, evaluate, evaluate_batch
-from covale.evaluator import COVALE
+from covale.evaluator import COVALE, covale, evaluate, evaluate_batch
 from covale.localize import LocalizationError, execute_expression, localize
 from covale.masks import AtlasMask
 from covale.metrics import dice

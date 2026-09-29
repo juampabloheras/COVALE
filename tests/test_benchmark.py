@@ -143,3 +143,34 @@ def test_annotate_jsonl_runs_rows_concurrently(
 
     assert summary["concurrency"] == 2
     assert summary["succeeded"] == 2
+
+
+def test_annotate_jsonl_supports_report_extraction(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    input_path = tmp_path / "pairs.jsonl"
+    output_path = tmp_path / "annotated.jsonl"
+    write_pairs(input_path)
+    calls: list[bool] = []
+
+    def score(*args, **kwargs) -> dict:
+        calls.append(kwargs["extract_findings"])
+        return {
+            "score": 0.5,
+            "diagnostics": {"resolved": True},
+        }
+
+    monkeypatch.setattr(run, "evaluate", score)
+
+    summary = run.annotate_jsonl(
+        input_path,
+        output_path,
+        extract_findings=True,
+        client=object(),
+    )
+
+    assert calls == [True, True]
+    assert summary["extract_findings"] is True
+    assert len(summary["extraction_prompt_sha256"]) == 64
+    assert len(summary["compatibility_prompt_sha256"]) == 64

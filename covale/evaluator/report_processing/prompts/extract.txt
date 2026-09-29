@@ -1,0 +1,17 @@
+Extract every clinical finding with an anatomical location from the report.
+
+Return only a JSON object with this shape:
+{
+  "findings": [
+    {
+      "text": "the source text describing the finding",
+      "concept": "a concise normalized clinical finding",
+      "anatomy": "the complete anatomical location phrase",
+      "assertion": "present, absent, or uncertain"
+    }
+  ]
+}
+
+Use an empty findings list when the report contains no anatomically localized
+findings. Keep laterality and spatial modifiers in anatomy. Do not infer
+findings or locations that are not stated in the report.

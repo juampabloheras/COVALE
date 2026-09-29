@@ -17,6 +17,7 @@ candidate text -> localization -> atlas ROI --/
 
 - [Install and test](#install-and-test)
 - [Calculate COVALE](#calculate-covale)
+- [Evaluate reports](#evaluate-reports)
 - [Run benchmarks](#run-benchmarks)
 - [Compare systems](#compare-systems)
 - [Config file](#config-file)
@@ -50,7 +51,8 @@ OPENAI_API_KEY=your-api-key
 | `deep_agent` | Uses a Deep Agent to map each description to an atlas region, then calculates Dice overlap | Yes |
 | `similarity` | Uses OpenAI to compare the descriptions directly as a language-only baseline | No |
 
-After populating the atlas registry, calculate a scalar COVALE score:
+After populating the atlas registry, pass equally sized lists of reference and
+candidate descriptions:
 
 ```python
 from covale import COVALE
@@ -61,6 +63,7 @@ covale_evaluator = COVALE(
     model="gpt-6-astra",
     registry_path="atlas_registry/registry.json",
     provider="openai",
+    extract_findings=False,
     per_sample=False,
     output_mode=None,
     cache=True,
@@ -70,47 +73,51 @@ covale_evaluator = COVALE(
     agent=None,
 )
 results = covale_evaluator(
-    refs=["left frontal lobe"],
-    hyps=["left frontal region"],
+    refs=[
+        "left frontal lobe",
+        "right temporal lobe",
+    ],
+    hyps=[
+        "left frontal region",
+        "right temporal region",
+    ],
 )
 print(results["dice"])
 ```
 
-
-For a batch, use a JSON file containing an array of phrase pairs:
-
-```json
-[
-  {
-    "reference": "left frontal lobe",
-    "candidate": "left frontal region"
-  },
-  {
-    "reference": "left frontal lobe",
-    "candidate": "right frontal lobe"
-  }
-]
-```
-
-Load the JSON and evaluate every pair:
+Later evaluators only need to set options that differ from these defaults:
 
 ```python
-import json
-from pathlib import Path
-
-from covale import evaluate_batch
-
-pairs = json.loads(Path("pairs.json").read_text(encoding="utf-8"))
-results = evaluate_batch(
-    pairs,
-    registry_path="atlas_registry/registry.json",
-    method="llm",
-    model="gpt-6-astra",
+agent_evaluator = COVALE(
+    method="deep_agent",
 )
 
-for result in results:
-    print(result["reference"], result["candidate"], result["score"])
+baseline_evaluator = COVALE(
+    method="similarity",
+)
 ```
+
+## Evaluate reports
+
+Set `extract_findings=True` when the inputs are sentences or reports rather
+than isolated anatomical locations:
+
+```python
+report_evaluator = COVALE(
+    extract_findings=True,
+    output_mode="detailed",
+)
+results = report_evaluator(
+    refs=reference_reports,
+    hyps=generated_reports,
+)
+```
+
+COVALE extracts anatomically localized findings, aligns compatible findings
+one to one, evaluates each matched location, and gives no credit for missing
+or extra findings. Detailed output includes every match and its spatial score,
+along with missing and extra findings. Location strings remain the default and
+skip finding extraction.
 
 ## Run benchmarks
 
@@ -124,6 +131,8 @@ uv run python benchmark/run.py \
   --method llm \
   --concurrency 8
 ```
+
+Add `--extract-findings` when the JSONL rows contain report pairs.
 
 See [benchmark/README.md](benchmark/README.md) for the output
 format and command options.
@@ -169,6 +178,8 @@ metrics:
       model_name: gpt-6-astra
       registry_path: ../atlas_registry/registry.json
       concurrency: 4
+
+extract_findings: false
 
 output:
   mode: detailed
