@@ -25,6 +25,7 @@ from covale.prompts import (
 )
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
+from covale.registry import DEFAULT_REGISTRY
 from covale.registry.models import LegacyAtlasRegistry, RegistryV2
 
 EXPECTED_ROW_ERRORS = (
@@ -64,7 +65,7 @@ def annotate_jsonl(
     *,
     method: CovaleMethod = "llm",
     model: str = DEFAULT_MODEL,
-    registry_path: str | Path = "atlas_registry/registry.json",
+    registry_path: str | Path = DEFAULT_REGISTRY,
     overwrite: bool = False,
     concurrency: int = 1,
     extract_findings: bool = False,
@@ -263,7 +264,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--registry",
         type=Path,
-        default=Path("atlas_registry/registry.json"),
+        default=DEFAULT_REGISTRY,
     )
     parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--extract-findings", action="store_true")

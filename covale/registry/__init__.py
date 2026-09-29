@@ -1,4 +1,5 @@
 from covale.registry.load import (
+    DEFAULT_REGISTRY,
     Registry,
     RegistryError,
     normalize_term,
@@ -28,6 +29,7 @@ __all__ = [
     "AtlasDefinition",
     "AtlasMask",
     "AtlasSpace",
+    "DEFAULT_REGISTRY",
     "LabelSource",
     "MaskSource",
     "RegionDefinition",

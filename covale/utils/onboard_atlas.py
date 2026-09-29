@@ -15,7 +15,7 @@ from covale.localize.openai_client import (
     request_json,
 )
 from covale.prompts import ATLAS_ONBOARDING_PROMPT
-from covale.registry import Registry
+from covale.registry import DEFAULT_REGISTRY, Registry
 from covale.registry.masks import load_label_volume, sha256_file
 from covale.registry.models import (
     AtlasDefinition,
@@ -589,7 +589,7 @@ def onboard_atlas(
     model: str = "gpt-6-astra",
     chunk_size: int = 15,
     client: OpenAIClient | None = None,
-    registry_path: str | Path = "atlas_registry/registry.json",
+    registry_path: str | Path = DEFAULT_REGISTRY,
     overwrite: bool = False,
 ) -> AtlasOnboardingResult:
     source_dir = Path(atlas_dir).expanduser().resolve()
@@ -753,7 +753,7 @@ def main() -> int:
     parser.add_argument(
         "--registry",
         type=Path,
-        default=Path("atlas_registry/registry.json"),
+        default=DEFAULT_REGISTRY,
     )
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()

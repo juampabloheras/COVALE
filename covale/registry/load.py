@@ -20,6 +20,13 @@ class RegistryError(ValueError):
     pass
 
 
+DEFAULT_REGISTRY = (
+    Path(__file__).resolve().parents[1]
+    / "atlas_registry"
+    / "registry.json"
+)
+
+
 def normalize_term(value: str) -> str:
     value = value.casefold().strip()
     value = re.sub(r"[_-]+", " ", value)

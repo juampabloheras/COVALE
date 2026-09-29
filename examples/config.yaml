@@ -3,7 +3,7 @@ metrics:
       method: llm
       provider: openai
       model_name: gpt-6-astra
-      registry_path: ../atlas_registry/registry.json
+      registry_path: ../covale/atlas_registry/registry.json
       concurrency: 4
 
 extract_findings: false

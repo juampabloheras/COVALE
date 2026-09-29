@@ -7,7 +7,12 @@ import pytest
 
 from covale.localize import LocalizationError, execute_expression
 from covale.localize.openai_client import ModelResponseError
-from covale.registry import Registry, RegistryError, RegistryResolver
+from covale.registry import (
+    DEFAULT_REGISTRY,
+    Registry,
+    RegistryError,
+    RegistryResolver,
+)
 
 
 def write_registry(path: Path, payload: dict[str, object]) -> Path:
@@ -72,6 +77,12 @@ def registry_v2() -> dict[str, object]:
             },
         },
     }
+
+
+def test_default_registry_is_packaged_with_covale() -> None:
+    assert DEFAULT_REGISTRY.parent.name == "atlas_registry"
+    assert DEFAULT_REGISTRY.parent.parent.name == "covale"
+    assert Registry.load(DEFAULT_REGISTRY).model.schema_version == 2
 
 
 def test_loads_registry_v2_and_searches_synonyms(tmp_path: Path) -> None:
