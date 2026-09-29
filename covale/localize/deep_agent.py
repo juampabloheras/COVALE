@@ -1,5 +1,6 @@
 import json
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, Protocol
 
 from covale.localize.atlas_expression import (
@@ -8,6 +9,8 @@ from covale.localize.atlas_expression import (
     LocalizationError,
 )
 from covale.localize.openai_client import ProviderError
+from covale.registry import Registry
+from covale.registry.models import RegistryV2
 
 
 class DeepAgent(Protocol):
@@ -73,12 +76,17 @@ def build_expression(
         raise ProviderError("Deep Agents is a core COVALE dependency. Reinstall COVALE to " "restore the provider.") from error
 
     try:
+        registry_model = RegistryV2.model_validate(registry)
+        candidates = Registry(
+            registry_model,
+            Path.cwd(),
+        ).compact_catalog(text)
         result = agent.invoke(
             {
                 "messages": json.dumps(
                     {
                         "anatomical_description": text,
-                        "atlas_registry": dict(registry),
+                        "candidate_regions": candidates,
                     }
                 )
             }

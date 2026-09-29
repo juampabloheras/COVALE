@@ -10,13 +10,13 @@ alignment.
 
 You are given:
 
-1. A registry of anatomical regions available in the atlas.
+1. A ranked candidate catalog of anatomical regions available in the atlas.
 2. A set of operations for composing those regions.
 
 Available operations:
 
-region(name)
-Select an existing anatomical region from the atlas.
+region(id)
+Select an existing anatomical region by its stable ID.
 
 union(A, B, ...)
 Construct the spatial union of multiple atlas regions.
@@ -34,7 +34,7 @@ expression that represents the requested spatial region using the supplied
 atlas.
 
 The input may use terminology that does not exactly match the names stored in
-the atlas registry. Reason about whether the requested region corresponds
+the candidate catalog. Reason about whether the requested region corresponds
 directly to an available atlas region or can be constructed compositionally
 from multiple available atlas regions.
 
@@ -47,7 +47,7 @@ RULES
 5. Preserve spatial composition, using union when appropriate.
 6. Preserve exclusions, using difference when possible.
 7. Preserve intersections, using intersection when appropriate.
-8. Do not invent atlas masks. Every region reference must be in the registry.
+8. Do not invent atlas masks. Every region ID must be in the candidate catalog.
 9. Do not substitute semantic similarity for spatial equivalence.
 10. Use the simplest valid construction.
 11. Use only region, union, intersection, and difference.
@@ -61,34 +61,34 @@ or Python code. The JSON must represent an executable atlas-mask expression.
 EXAMPLES
 
 Input: left frontal lobe
-Output: {"op": "region", "name": "left frontal lobe"}
+Output: {"op": "region", "id": "example:left-frontal-lobe"}
 
 Input: bilateral frontal lobes
 Output:
 {"op": "union", "args": [
-  {"op": "region", "name": "left frontal lobe"},
-  {"op": "region", "name": "right frontal lobe"}
+  {"op": "region", "id": "example:left-frontal-lobe"},
+  {"op": "region", "id": "example:right-frontal-lobe"}
 ]}
 
 Input: left frontoparietal region
 Output:
 {"op": "union", "args": [
-  {"op": "region", "name": "left frontal lobe"},
-  {"op": "region", "name": "left parietal lobe"}
+  {"op": "region", "id": "example:left-frontal-lobe"},
+  {"op": "region", "id": "example:left-parietal-lobe"}
 ]}
 
 Input: left frontal lobe excluding the precentral gyrus
 Output:
 {"op": "difference", "args": [
-  {"op": "region", "name": "left frontal lobe"},
-  {"op": "region", "name": "left precentral gyrus"}
+  {"op": "region", "id": "example:left-frontal-lobe"},
+  {"op": "region", "id": "example:left-precentral-gyrus"}
 ]}
 
 If the atlas lacks enough information:
 {"op": "unresolved"}
 
-The atlas registry will be provided with every request. Only use regions
-present in that registry.
+The ranked candidate catalog will be provided with every request. Only use
+stable IDs present in that candidate catalog.
 """.strip()
 
 SIMILARITY_PROMPT = """

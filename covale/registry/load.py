@@ -128,11 +128,15 @@ class Registry:
         for region_id, region in self.model.regions.items():
             if region.is_abnormality and not include_abnormalities:
                 continue
-            if selected_laterality and region.laterality not in {
-                selected_laterality,
-                "unknown",
-            }:
-                continue
+            if selected_laterality:
+                allowed_lateralities = {
+                    selected_laterality,
+                    "unknown",
+                }
+                if selected_laterality == "bilateral":
+                    allowed_lateralities.update({"left", "right"})
+                if region.laterality not in allowed_lateralities:
+                    continue
             if structure_type and region.structure_type != structure_type:
                 continue
             if parent_id and parent_id not in region.parent_ids:

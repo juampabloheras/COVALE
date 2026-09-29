@@ -14,6 +14,7 @@ from covale.registry.models import (
     RegionMatch,
     RegistryV2,
 )
+from covale.registry.resolve import RegistryResolver
 
 __all__ = [
     "AtlasDefinition",
@@ -25,6 +26,7 @@ __all__ = [
     "Registry",
     "RegistryError",
     "RegistryV2",
+    "RegistryResolver",
     "normalize_term",
     "query_laterality",
     "load_region_mask",

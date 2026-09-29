@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 
 from covale.localize import LocalizationError, execute_expression
-from covale.registry import Registry, RegistryError
+from covale.localize.openai_client import ModelResponseError
+from covale.registry import Registry, RegistryError, RegistryResolver
 
 
 def write_registry(path: Path, payload: dict[str, object]) -> Path:
@@ -109,6 +110,22 @@ def test_bare_name_can_return_both_lateralities(tmp_path: Path) -> None:
     }
 
 
+def test_bilateral_query_includes_unilateral_components(
+    tmp_path: Path,
+) -> None:
+    registry = Registry.load(
+        write_registry(tmp_path / "registry.json", registry_v2())
+    )
+
+    matches = registry.search("bilateral hippocampi")
+
+    assert {match.region_id for match in matches} == {
+        "anatomical:17",
+        "anatomical:53",
+        "arterial:1",
+    }
+
+
 def test_search_supports_structured_filters(tmp_path: Path) -> None:
     registry = Registry.load(
         write_registry(tmp_path / "registry.json", registry_v2())
@@ -171,6 +188,104 @@ def test_compact_catalog_contains_stable_ids(tmp_path: Path) -> None:
             "synonyms": ["left ACA", "ACA left"],
         }
     ]
+
+
+class FakeResponses:
+    def __init__(self, *outputs: dict[str, object]) -> None:
+        self.outputs = iter(outputs)
+        self.requests: list[dict[str, object]] = []
+
+    def create(self, **request: object) -> object:
+        self.requests.append(request)
+        return type(
+            "Response",
+            (),
+            {"output_text": json.dumps(next(self.outputs))},
+        )()
+
+
+class FakeClient:
+    def __init__(self, *outputs: dict[str, object]) -> None:
+        self.responses = FakeResponses(*outputs)
+
+
+def test_resolver_exact_synonym_bypasses_openai(tmp_path: Path) -> None:
+    registry = Registry.load(
+        write_registry(tmp_path / "registry.json", registry_v2())
+    )
+    client = FakeClient()
+
+    expression = RegistryResolver(
+        registry,
+        client=client,
+        model="test-model",
+    ).resolve("left ACA")
+
+    assert expression == {"op": "region", "id": "arterial:1"}
+    assert client.responses.requests == []
+
+
+def test_resolver_uses_compact_candidates_for_composition(
+    tmp_path: Path,
+) -> None:
+    registry = Registry.load(
+        write_registry(tmp_path / "registry.json", registry_v2())
+    )
+    client = FakeClient(
+        {
+            "op": "union",
+            "args": [
+                {"op": "region", "id": "anatomical:17"},
+                {"op": "region", "id": "anatomical:53"},
+            ],
+        }
+    )
+
+    expression = RegistryResolver(
+        registry,
+        client=client,
+        model="test-model",
+    ).resolve("bilateral hippocampi")
+
+    assert expression["op"] == "union"
+    request = client.responses.requests[0]
+    payload = json.loads(request["input"])
+    assert "atlas_registry" not in payload
+    assert {candidate["id"] for candidate in payload["candidate_regions"]} == {
+        "anatomical:17",
+        "anatomical:53",
+        "arterial:1",
+    }
+
+
+def test_resolver_rejects_id_outside_candidates(tmp_path: Path) -> None:
+    registry = Registry.load(
+        write_registry(tmp_path / "registry.json", registry_v2())
+    )
+    client = FakeClient({"op": "region", "id": "unknown:1"})
+
+    with pytest.raises(ModelResponseError, match="outside candidate catalog"):
+        RegistryResolver(
+            registry,
+            client=client,
+            model="test-model",
+        ).resolve("unlisted anatomy")
+
+
+def test_resolver_rejects_conflicting_laterality(tmp_path: Path) -> None:
+    registry = Registry.load(
+        write_registry(tmp_path / "registry.json", registry_v2())
+    )
+    client = FakeClient(
+        {"op": "region", "id": "anatomical:53"},
+    )
+
+    with pytest.raises(ModelResponseError, match="outside candidate catalog"):
+        RegistryResolver(
+            registry,
+            client=client,
+            model="test-model",
+        ).resolve("left hippocampal area")
 
 
 def write_labeled_registry(

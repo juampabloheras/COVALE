@@ -255,7 +255,7 @@ def test_report_evaluation_reuses_created_client(
 
     assert result["score"] == 1.0
     assert created == 1
-    assert len(client.responses.requests) == 5
+    assert len(client.responses.requests) == 3
 
 
 def test_evaluator_forwards_extract_findings(monkeypatch) -> None:
