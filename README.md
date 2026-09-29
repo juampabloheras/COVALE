@@ -254,14 +254,31 @@ print(timing)
 Use `covale-onboard-atlas` to validate a labeled NIfTI volume, standardize its
 label ontology, and copy the resulting resources under the atlas registry:
 
+For example, if `NewAtlas.nii.gz` uses `0` for background, `1` for the left
+hippocampus, and `2` for the right hippocampus, create `NewAtlas_labels.json`:
+
+```json
+{
+  "1": "left hippocampus",
+  "2": "right hippocampus"
+}
+```
+
+Then run:
+
 ```bash
 covale-onboard-atlas \
   MNI_NewAtlas \
-  /path/to/NewAtlas.nii.gz \
+  NewAtlas.nii.gz \
   atlas_registry/atlases \
-  --labels-json /path/to/NewAtlas_labels.json \
+  --labels-json NewAtlas_labels.json \
   --canonicalization deterministic
 ```
+
+This creates
+`atlas_registry/atlases/MNI_NewAtlas/NewAtlas_canonical_names.json`, copies the
+original label file under `raw_labels/`, and copies the volume under
+`volumes/`.
 
 Use `--canonicalization none` when the label JSON already contains canonical
 names, synonyms, and laterality, or `openai` to use the consumer OpenAI API.
