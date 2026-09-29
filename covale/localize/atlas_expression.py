@@ -4,7 +4,6 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from covale.prompts import LOCALIZATION_PROMPT
 from covale.registry import (
     AtlasMask,
     DEFAULT_REGISTRY,

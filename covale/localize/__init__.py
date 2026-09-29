@@ -1,6 +1,5 @@
 from covale.localize.atlas_expression import (
     DEFAULT_REGISTRY,
-    LOCALIZATION_PROMPT,
     Expression,
     ExpressionBuilder,
     LocalizationError,
@@ -13,7 +12,6 @@ from covale.localize.atlas_expression import (
 
 __all__ = [
     "DEFAULT_REGISTRY",
-    "LOCALIZATION_PROMPT",
     "Expression",
     "ExpressionBuilder",
     "LocalizationError",

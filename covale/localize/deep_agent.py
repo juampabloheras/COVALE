@@ -3,9 +3,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
+from covale.prompts import LOCALIZATION_PROMPT
+
 from covale.localize.atlas_expression import (
     Expression,
-    LOCALIZATION_PROMPT,
     LocalizationError,
 )
 from covale.localize.openai_client import ProviderError
