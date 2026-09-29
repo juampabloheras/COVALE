@@ -27,7 +27,14 @@ class AtlasRegistry(StrictModel):
 
 class RegionExpression(StrictModel):
     op: Literal["region"]
-    name: str = Field(min_length=1)
+    id: str | None = Field(default=None, min_length=1)
+    name: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def require_one_reference(self) -> "RegionExpression":
+        if (self.id is None) == (self.name is None):
+            raise ValueError("Region expression requires exactly one of id or name.")
+        return self
 
 
 class UnionExpression(StrictModel):

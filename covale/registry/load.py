@@ -2,6 +2,7 @@ import json
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -83,6 +84,8 @@ class Registry:
     def __init__(self, model: RegistryV2, root: Path) -> None:
         self.model = model
         self.root = root.resolve()
+        self._atlas_cache: dict[str, Any] = {}
+        self._mask_cache: dict[str, Any] = {}
 
     @classmethod
     def load(cls, path: str | Path) -> "Registry":
@@ -208,6 +211,33 @@ class Registry:
             }
             for match in self.search(query, limit=limit)
         ]
+
+    def resolve_name(self, name: str) -> str | None:
+        exact = [
+            match
+            for match in self.search(name, limit=len(self.model.regions))
+            if match.score == 1.0
+        ]
+        if not exact:
+            return None
+        region_ids = {match.region_id for match in exact}
+        if len(region_ids) != 1:
+            raise RegistryError(
+                f"Ambiguous atlas region '{name}': {sorted(region_ids)}"
+            )
+        return exact[0].region_id
+
+    def mask(self, region_id: str):
+        from covale.registry.masks import load_region_mask
+
+        if region_id not in self._mask_cache:
+            self._mask_cache[region_id] = load_region_mask(
+                self.model,
+                self.root,
+                region_id,
+                atlas_cache=self._atlas_cache,
+            )
+        return self._mask_cache[region_id]
 
     def _priority(self, region_id: str) -> int:
         source = self.model.regions[region_id].source

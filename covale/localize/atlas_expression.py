@@ -4,9 +4,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from covale.masks import AtlasMask, difference, intersection, load_mask, union
-from covale.models import AtlasRegistry, validate_expression
+from covale.masks import AtlasMask, difference, intersection, union
+from covale.models import validate_expression
 from covale.prompts import LOCALIZATION_PROMPT
+from covale.registry import Registry, RegistryError
 
 DEFAULT_REGISTRY = Path(__file__).resolve().parents[2] / "atlas_registry" / "registry.json"
 Expression = Mapping[str, Any]
@@ -18,13 +19,10 @@ class LocalizationError(ValueError):
 
 
 def load_registry(registry_path: str | Path) -> dict[str, Any]:
-    path = Path(registry_path)
     try:
-        registry = AtlasRegistry.model_validate_json(path.read_text(encoding="utf-8"))
-    except (OSError, ValidationError) as error:
-        raise LocalizationError(f"Could not read atlas registry: {path}") from error
-
-    return registry.model_dump()
+        return Registry.load(registry_path).model.model_dump(mode="json")
+    except RegistryError as error:
+        raise LocalizationError(str(error)) from error
 
 
 def execute_expression(
@@ -32,49 +30,31 @@ def execute_expression(
     registry_path: str | Path = DEFAULT_REGISTRY,
 ) -> AtlasMask:
     path = Path(registry_path)
-    registry = load_registry(path)
     try:
-        expression = validate_expression(expression).model_dump()
+        registry = Registry.load(path)
+    except RegistryError as error:
+        raise LocalizationError(str(error)) from error
+    try:
+        expression = validate_expression(expression).model_dump(exclude_none=True)
     except ValidationError as error:
         raise LocalizationError(f"Invalid mask expression: {error}") from error
-    regions = registry["regions"]
-    registry_root = path.resolve().parent
 
-    def resolve_region(name: str) -> AtlasMask:
-        canonical_name = name
-        if canonical_name not in regions:
-            requested_name = name.casefold()
-            canonical_name = next(
-                (
-                    region_name
-                    for region_name, entry in regions.items()
-                    if isinstance(entry, dict)
-                    and requested_name
-                    in {
-                        region_name.casefold(),
-                        *(alias.casefold() for alias in entry.get("aliases", []) if isinstance(alias, str)),
-                    }
-                ),
-                "",
-            )
-
-        if not canonical_name:
-            raise LocalizationError(f"Unknown atlas region: {name}")
-
-        entry = regions[canonical_name]
-        if not isinstance(entry, dict):
-            raise LocalizationError(f"Malformed atlas region: {canonical_name}")
-
-        relative_path = entry.get("mask")
-        if not isinstance(relative_path, str) or not relative_path:
-            raise LocalizationError("Atlas region must define a mask path.")
-
-        mask_path = (registry_root / relative_path).resolve()
-        if not mask_path.is_relative_to(registry_root):
-            raise LocalizationError("Atlas mask path must remain inside atlas_registry.")
-        if not mask_path.is_file():
-            raise LocalizationError(f"Atlas mask does not exist: {relative_path}")
-        return load_mask(mask_path)
+    def resolve_region(node: Mapping[str, Any]) -> AtlasMask:
+        region_id = node.get("id")
+        if region_id is None:
+            name = node.get("name")
+            if not isinstance(name, str):
+                raise LocalizationError("Region expression requires an id or name.")
+            try:
+                region_id = registry.resolve_name(name)
+            except RegistryError as error:
+                raise LocalizationError(str(error)) from error
+            if region_id is None:
+                raise LocalizationError(f"Unknown atlas region: {name}")
+        try:
+            return registry.mask(region_id)
+        except ValueError as error:
+            raise LocalizationError(str(error)) from error
 
     def interpret(node: object) -> AtlasMask:
         if not isinstance(node, dict) or not isinstance(node.get("op"), str):
@@ -87,9 +67,7 @@ def execute_expression(
             raise LocalizationError("Anatomical description could not be localized.")
 
         if operator == "region":
-            if set(node) != {"op", "name"} or not isinstance(node.get("name"), str):
-                raise LocalizationError("Region expression requires a string name.")
-            return resolve_region(node["name"])
+            return resolve_region(node)
 
         if operator not in {"union", "intersection", "difference"}:
             raise LocalizationError(f"Unknown mask operator: {operator}")
@@ -145,26 +123,30 @@ def localize_with_expression(
     if not isinstance(text, str) or not text.strip():
         raise LocalizationError("Anatomical description must be non-empty text.")
 
-    registry = load_registry(registry_path)
+    try:
+        registry = Registry.load(registry_path)
+    except RegistryError as error:
+        raise LocalizationError(str(error)) from error
     if expression_builder is None:
-        requested_name = text.strip().casefold()
-        expression: Expression = {"op": "unresolved"}
-        for name, entry in registry["regions"].items():
-            aliases = entry.get("aliases", []) if isinstance(entry, dict) else []
-            available_names = [
-                name,
-                *(alias for alias in aliases if isinstance(alias, str)),
-            ]
-            if requested_name in {available_name.casefold() for available_name in available_names}:
-                expression = {"op": "region", "name": name}
-                break
+        try:
+            region_id = registry.resolve_name(text)
+        except RegistryError as error:
+            raise LocalizationError(str(error)) from error
+        expression: Expression = (
+            {"op": "region", "id": region_id}
+            if region_id is not None
+            else {"op": "unresolved"}
+        )
     else:
-        expression = expression_builder(text, registry)
+        expression = expression_builder(
+            text,
+            registry.model.model_dump(mode="json"),
+        )
 
     if not isinstance(expression, Mapping):
         raise LocalizationError("Localization must return a mask expression.")
     try:
-        expression = validate_expression(expression).model_dump()
+        expression = validate_expression(expression).model_dump(exclude_none=True)
     except ValidationError as error:
         raise LocalizationError(f"Localization returned an invalid expression: {error}") from error
     return expression, execute_expression(expression, registry_path)

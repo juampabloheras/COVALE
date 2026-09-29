@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 
+import nibabel as nib
+import numpy as np
 import pytest
 
+from covale.localize import LocalizationError, execute_expression
 from covale.registry import Registry, RegistryError
 
 
@@ -168,3 +171,79 @@ def test_compact_catalog_contains_stable_ids(tmp_path: Path) -> None:
             "synonyms": ["left ACA", "ACA left"],
         }
     ]
+
+
+def write_labeled_registry(
+    tmp_path: Path,
+    values: list[int],
+) -> Path:
+    atlas_dir = tmp_path / "atlases"
+    atlas_dir.mkdir()
+    nib.save(
+        nib.Nifti1Image(
+            np.array(values, dtype=np.int16).reshape(len(values), 1, 1),
+            np.eye(4),
+        ),
+        atlas_dir / "arterial.nii.gz",
+    )
+    payload = registry_v2()
+    payload["regions"] = {
+        "arterial:1": payload["regions"]["arterial:1"],
+    }
+    return write_registry(tmp_path / "registry.json", payload)
+
+
+def test_executes_stable_id_from_labeled_atlas(tmp_path: Path) -> None:
+    path = write_labeled_registry(tmp_path, [0, 1, 2])
+
+    result = execute_expression(
+        {"op": "region", "id": "arterial:1"},
+        path,
+    )
+
+    np.testing.assert_array_equal(result.data.ravel(), [False, True, False])
+
+
+def test_labeled_region_can_combine_multiple_values(tmp_path: Path) -> None:
+    path = write_labeled_registry(tmp_path, [0, 1, 2])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["regions"]["arterial:1"]["source"]["values"] = [1, 2]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = execute_expression(
+        {"op": "region", "id": "arterial:1"},
+        path,
+    )
+
+    np.testing.assert_array_equal(result.data.ravel(), [False, True, True])
+
+
+def test_rejects_missing_atlas_label(tmp_path: Path) -> None:
+    path = write_labeled_registry(tmp_path, [0, 1, 2])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["regions"]["arterial:1"]["source"]["values"] = [99]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(LocalizationError, match="missing atlas labels"):
+        execute_expression(
+            {"op": "region", "id": "arterial:1"},
+            path,
+        )
+
+
+def test_rejects_atlas_path_outside_registry(tmp_path: Path) -> None:
+    path = write_labeled_registry(tmp_path, [0, 1, 2])
+    outside = tmp_path.parent / "outside.nii.gz"
+    nib.save(
+        nib.Nifti1Image(np.array([0, 1], dtype=np.int16), np.eye(4)),
+        outside,
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["atlases"]["arterial"]["volume"] = "../outside.nii.gz"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(LocalizationError, match="inside atlas_registry"):
+        execute_expression(
+            {"op": "region", "id": "arterial:1"},
+            path,
+        )

@@ -4,6 +4,7 @@ from covale.registry.load import (
     normalize_term,
     query_laterality,
 )
+from covale.registry.masks import load_region_mask
 from covale.registry.models import (
     AtlasDefinition,
     AtlasSpace,
@@ -26,4 +27,5 @@ __all__ = [
     "RegistryV2",
     "normalize_term",
     "query_laterality",
+    "load_region_mask",
 ]
