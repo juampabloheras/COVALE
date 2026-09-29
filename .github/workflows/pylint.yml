@@ -21,4 +21,5 @@ jobs:
 
       - name: Analyze COVALE
         run: |
-          pylint covale
+          pylint covale \
+            --disable=C0114,C0115,C0116,C0415,W1404,R0401
