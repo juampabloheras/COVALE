@@ -160,6 +160,48 @@ def test_report_evaluation_extracts_aligns_and_scores(tmp_path: Path) -> None:
     assert len(client.responses.requests) == 3
 
 
+def test_report_evaluation_saves_each_localized_finding(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(
+        extraction(
+            finding("first reference", "region a"),
+            finding("second reference", "region b"),
+            finding("repeated reference", "region a"),
+        ),
+        extraction(
+            finding("first candidate", "region a"),
+            finding("second candidate", "region b"),
+            finding("repeated candidate", "region a"),
+        ),
+        compatibility((0, 0), (1, 1), (2, 2)),
+    )
+    output_dir = tmp_path / "volumes"
+
+    evaluate(
+        "reference report",
+        "candidate report",
+        registry(tmp_path),
+        expression,
+        extract_findings=True,
+        client=client,
+        save_volumes=output_dir,
+    )
+
+    expected = {
+        "query_region_a.nii.gz": 100,
+        "query_region_a_2.nii.gz": 100,
+        "query_region_b.nii.gz": 100,
+        "target_region_a.nii.gz": 200,
+        "target_region_a_2.nii.gz": 200,
+        "target_region_b.nii.gz": 200,
+    }
+    for name, label in expected.items():
+        data = np.asarray(nib.load(output_dir / name).dataobj)
+        assert set(np.unique(data)) <= {0, label}
+        assert label in data
+
+
 def test_report_evaluation_penalizes_missing_findings(
     tmp_path: Path,
 ) -> None:

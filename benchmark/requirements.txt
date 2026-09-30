@@ -1,0 +1,3 @@
+# Additional dependency for benchmark/compare_metrics.py.
+radeval==2.2.1
+tqdm>=4.70.0

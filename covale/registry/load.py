@@ -221,6 +221,96 @@ class Registry:
             for match in self.search(query, limit=limit)
         ]
 
+    def composition_catalog(
+        self,
+        query: str,
+        *,
+        limit: int = 80,
+    ) -> list[dict[str, object]]:
+        """Return direct and component candidates for one-shot composition."""
+        if limit < 1:
+            raise ValueError("Catalog limit must be at least 1.")
+        normalized_query = normalize_term(query)
+        ignored_tokens = {
+            "and",
+            "area",
+            "bilateral",
+            "left",
+            "region",
+            "right",
+            "the",
+        }
+        query_roots = {
+            token[:5]
+            for token in normalized_query.split()
+            if len(token) >= 4 and token not in ignored_tokens
+        }
+        selected_laterality = query_laterality(query)
+        ranked_ids = [
+            match.region_id
+            for match in self.search(query, limit=limit)
+        ]
+        related: list[tuple[int, float, int, str]] = []
+        for region_id, region in self.model.regions.items():
+            if region_id in ranked_ids or region.is_abnormality:
+                continue
+            if selected_laterality:
+                allowed = {selected_laterality, "unknown"}
+                if selected_laterality == "bilateral":
+                    allowed.update({"left", "right"})
+                if region.laterality not in allowed:
+                    continue
+            terms = [
+                region.display_name,
+                region.canonical_name,
+                region.parent_anatomy or "",
+                *region.synonyms,
+            ]
+            normalized_terms = " ".join(normalize_term(term) for term in terms)
+            overlap = sum(root in normalized_terms for root in query_roots)
+            reverse_overlap = sum(
+                token[:5] in normalized_query
+                for token in normalized_terms.split()
+                if len(token) >= 5
+            )
+            relevance = max(overlap, reverse_overlap)
+            if relevance:
+                related.append(
+                    (
+                        -relevance,
+                        -SequenceMatcher(
+                            None,
+                            normalized_query,
+                            normalize_term(region.display_name),
+                        ).ratio(),
+                        self._priority(region_id),
+                        region_id,
+                    )
+                )
+        ranked_ids.extend(
+            region_id
+            for *_, region_id in sorted(related)
+            if region_id not in ranked_ids
+        )
+
+        catalog = []
+        for region_id in ranked_ids[:limit]:
+            region = self.model.regions[region_id]
+            source_atlas = getattr(region.source, "atlas", None)
+            catalog.append(
+                {
+                    "id": region_id,
+                    "name": region.display_name,
+                    "canonical_name": region.canonical_name,
+                    "laterality": region.laterality,
+                    "parent_anatomy": region.parent_anatomy,
+                    "structure_type": region.structure_type,
+                    "atlas": source_atlas,
+                    "synonyms": region.synonyms,
+                }
+            )
+        return catalog
+
     def resolve_name(self, name: str) -> str | None:
         exact = [
             match

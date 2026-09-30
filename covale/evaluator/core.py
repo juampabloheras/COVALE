@@ -11,11 +11,13 @@ from pydantic import ValidationError
 from covale.evaluator.evaluate import (
     DEFAULT_MODEL,
     CovaleMethod,
+    LocalizationCache,
     evaluate as evaluate_pair,
 )
 from covale.localize import DEFAULT_REGISTRY
 from covale.localize.deep_agent import DeepAgent, create_agent
 from covale.localize.openai_client import OpenAIClient, create_client
+from covale.registry import Registry
 from covale.evaluator.models import EvaluatorConfig
 
 OutputMode = Literal["default", "per_sample", "detailed"]
@@ -70,6 +72,7 @@ class COVALE:
         self.client = client
         self.agent = agent
         self.results: dict[tuple[str, str, bool, str, str], dict[str, Any]] = {}
+        self.localization_results: LocalizationCache = {}
 
     @classmethod
     def from_config(
@@ -110,16 +113,22 @@ class COVALE:
 
     def prepare_provider(self) -> None:
         if (
-            self.extract_findings or self.method in {"llm", "similarity"}
+            self.extract_findings
+            or self.method in {"llm", "deep_agent", "similarity"}
         ) and self.client is None:
             self.client = create_client()
         if self.method == "deep_agent" and self.agent is None:
-            self.agent = create_agent(self.model)
+            self.agent = create_agent(
+                self.model,
+                Registry.load(self.registry_path),
+            )
 
     def evaluate_pair(
         self,
         reference: str,
         candidate: str,
+        *,
+        save_volumes: str | Path | None = None,
     ) -> dict[str, Any]:
         key = (
             self.method,
@@ -128,7 +137,8 @@ class COVALE:
             reference,
             candidate,
         )
-        if self.cache and key in self.results:
+        use_pair_cache = self.cache and save_volumes is None
+        if use_pair_cache and key in self.results:
             return self.results[key]
 
         self.prepare_provider()
@@ -142,6 +152,10 @@ class COVALE:
                 extract_findings=self.extract_findings,
                 client=self.client,
                 agent=self.agent,
+                save_volumes=save_volumes,
+                _localization_cache=(
+                    self.localization_results if self.cache else {}
+                ),
             )
         except (ValueError, RuntimeError, TimeoutError) as error:
             if self.errors == "raise":
@@ -157,12 +171,22 @@ class COVALE:
                     "error": str(error),
                 },
             }
-        if self.cache:
+        if use_pair_cache:
             self.results[key] = result
         return result
 
-    def score(self, reference: str, candidate: str) -> float:
-        result = self.evaluate_pair(reference, candidate)
+    def score(
+        self,
+        reference: str,
+        candidate: str,
+        *,
+        save_volumes: str | Path | None = None,
+    ) -> float:
+        result = self.evaluate_pair(
+            reference,
+            candidate,
+            save_volumes=save_volumes,
+        )
         score = result.get("score")
         if not isinstance(score, int | float) or isinstance(score, bool):
             raise ValueError("COVALE pair did not produce a Dice score.")

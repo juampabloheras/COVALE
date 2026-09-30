@@ -51,6 +51,40 @@ class DifferenceExpression(StrictModel):
     args: list["Expression"] = Field(min_length=2)
 
 
+class DirectionalPartExpression(StrictModel):
+    op: Literal["directional_part"]
+    arg: "Expression"
+    direction: Literal[
+        "anterior",
+        "posterior",
+        "superior",
+        "inferior",
+        "left",
+        "right",
+    ]
+    fraction: float = Field(gt=0, le=1)
+
+
+class ClipPlaneExpression(StrictModel):
+    op: Literal["clip_plane"]
+    arg: "Expression"
+    normal: tuple[float, float, float]
+    offset_mm: float
+    side: Literal["positive", "negative"] = "positive"
+
+    @model_validator(mode="after")
+    def require_nonzero_normal(self) -> "ClipPlaneExpression":
+        if not any(value != 0 for value in self.normal):
+            raise ValueError("Plane normal must not be zero.")
+        return self
+
+
+class MorphologyExpression(StrictModel):
+    op: Literal["dilate", "erode"]
+    arg: "Expression"
+    distance_mm: float = Field(gt=0, le=50)
+
+
 class UnresolvedExpression(StrictModel):
     op: Literal["unresolved"]
 
@@ -60,12 +94,18 @@ Expression = Annotated[
     | UnionExpression
     | IntersectionExpression
     | DifferenceExpression
+    | DirectionalPartExpression
+    | ClipPlaneExpression
+    | MorphologyExpression
     | UnresolvedExpression,
     Field(discriminator="op"),
 ]
 UnionExpression.model_rebuild()
 IntersectionExpression.model_rebuild()
 DifferenceExpression.model_rebuild()
+DirectionalPartExpression.model_rebuild()
+ClipPlaneExpression.model_rebuild()
+MorphologyExpression.model_rebuild()
 EXPRESSION_ADAPTER = TypeAdapter(Expression)
 
 

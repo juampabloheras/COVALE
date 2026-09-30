@@ -101,6 +101,14 @@ def test_default_registry_is_packaged_with_covale() -> None:
         "aparc-a2009s-aseg:10",
         "nextbrain-left-right-merged:218",
     }
+    striatum_candidates = {
+        entry["id"]
+        for entry in registry.composition_catalog("left striatum")
+    }
+    assert {
+        "aparc-a2009s-aseg:11",
+        "aparc-a2009s-aseg:12",
+    } <= striatum_candidates
 
     combined = execute_expression(
         {
@@ -116,6 +124,23 @@ def test_default_registry_is_packaged_with_covale() -> None:
     )
     assert combined.data.shape == (182, 218, 182)
     assert combined.data.any()
+
+    hippocampus = execute_expression(
+        {"op": "region", "id": "aparc-a2009s-aseg:17"}
+    )
+    anterior_hippocampus = execute_expression(
+        {
+            "op": "directional_part",
+            "arg": {
+                "op": "region",
+                "id": "aparc-a2009s-aseg:17",
+            },
+            "direction": "anterior",
+            "fraction": 1 / 3,
+        }
+    )
+    assert 0 < anterior_hippocampus.data.sum() < hippocampus.data.sum()
+    assert np.all(anterior_hippocampus.data <= hippocampus.data)
 
     resampling = json.loads(
         (DEFAULT_REGISTRY.parent / "nextbrain_resampling.json").read_text()
@@ -228,6 +253,35 @@ def test_compact_catalog_contains_stable_ids(tmp_path: Path) -> None:
     ]
 
 
+def test_composition_catalog_includes_related_components(
+    tmp_path: Path,
+) -> None:
+    payload = registry_v2()
+    payload["regions"]["anatomical:100"] = {
+        "canonical_name": "frontal pole",
+        "display_name": "left frontal pole",
+        "laterality": "left",
+        "parent_anatomy": "frontal lobe",
+        "structure_type": "cortical_region",
+        "synonyms": ["left anterior frontal cortex"],
+        "source": {
+            "type": "labels",
+            "atlas": "anatomical",
+            "values": [100],
+        },
+    }
+    registry = Registry.load(write_registry(tmp_path / "registry.json", payload))
+
+    catalog = registry.composition_catalog("left frontal lobe")
+
+    component = next(
+        entry for entry in catalog if entry["id"] == "anatomical:100"
+    )
+    assert component["parent_anatomy"] == "frontal lobe"
+    assert component["atlas"] == "anatomical"
+    assert all(entry["laterality"] != "right" for entry in catalog)
+
+
 class FakeResponses:
     def __init__(self, *outputs: dict[str, object]) -> None:
         self.outputs = iter(outputs)
@@ -292,6 +346,21 @@ def test_resolver_uses_compact_candidates_for_composition(
     }
 
 
+def test_resolver_uses_full_registry_by_default() -> None:
+    registry = Registry.load(DEFAULT_REGISTRY)
+    client = FakeClient({"op": "unresolved"})
+
+    expression = RegistryResolver(
+        registry,
+        client=client,
+        model="test-model",
+    ).resolve("anatomical structure")
+
+    payload = json.loads(client.responses.requests[0]["input"])
+    assert expression == {"op": "unresolved"}
+    assert len(payload["candidate_regions"]) == len(registry.model.regions)
+
+
 def test_resolver_rejects_id_outside_candidates(tmp_path: Path) -> None:
     registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
     client = FakeClient({"op": "region", "id": "unknown:1"})
@@ -302,6 +371,31 @@ def test_resolver_rejects_id_outside_candidates(tmp_path: Path) -> None:
             client=client,
             model="test-model",
         ).resolve("unlisted anatomy")
+
+
+def test_resolver_accepts_spatial_primitive(tmp_path: Path) -> None:
+    registry = Registry.load(write_registry(tmp_path / "registry.json", registry_v2()))
+    client = FakeClient(
+        {
+            "op": "directional_part",
+            "arg": {"op": "region", "id": "anatomical:17"},
+            "direction": "anterior",
+            "fraction": 0.33,
+        }
+    )
+
+    expression = RegistryResolver(
+        registry,
+        client=client,
+        model="test-model",
+    ).resolve("anterior third of the left hippocampus")
+
+    assert expression == {
+        "op": "directional_part",
+        "arg": {"op": "region", "id": "anatomical:17"},
+        "direction": "anterior",
+        "fraction": 0.33,
+    }
 
 
 def test_resolver_rejects_conflicting_laterality(tmp_path: Path) -> None:

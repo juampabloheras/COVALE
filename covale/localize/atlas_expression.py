@@ -14,6 +14,11 @@ from covale.registry import (
     union,
 )
 from covale.registry.models import validate_expression
+from covale.localize.spatial_primitives import (
+    clip_plane,
+    directional_part,
+    morphology,
+)
 
 Expression = Mapping[str, Any]
 ExpressionBuilder = Callable[[str, Mapping[str, Any]], Expression]
@@ -34,11 +39,17 @@ def execute_expression(
     expression: Expression,
     registry_path: str | Path = DEFAULT_REGISTRY,
 ) -> AtlasMask:
-    path = Path(registry_path)
     try:
-        registry = Registry.load(path)
+        registry = Registry.load(Path(registry_path))
     except RegistryError as error:
         raise LocalizationError(str(error)) from error
+    return execute_registry_expression(expression, registry)
+
+
+def execute_registry_expression(
+    expression: Expression,
+    registry: Registry,
+) -> AtlasMask:
     try:
         expression = validate_expression(expression).model_dump(exclude_none=True)
     except ValidationError as error:
@@ -74,6 +85,31 @@ def execute_expression(
         if operator == "region":
             return resolve_region(node)
 
+        if operator in {
+            "directional_part",
+            "clip_plane",
+            "dilate",
+            "erode",
+        }:
+            mask = interpret(node["arg"])
+            try:
+                if operator == "directional_part":
+                    return directional_part(
+                        mask,
+                        node["direction"],
+                        node["fraction"],
+                    )
+                if operator == "clip_plane":
+                    return clip_plane(
+                        mask,
+                        tuple(node["normal"]),
+                        node["offset_mm"],
+                        node["side"],
+                    )
+                return morphology(mask, operator, node["distance_mm"])
+            except ValueError as error:
+                raise LocalizationError(str(error)) from error
+
         if operator not in {"union", "intersection", "difference"}:
             raise LocalizationError(f"Unknown mask operator: {operator}")
         if set(node) != {"op", "args"} or not isinstance(node.get("args"), list):
@@ -98,6 +134,10 @@ def expression_stats(expression: Expression) -> dict[str, int]:
         operator = node.get("op")
         if operator == "region":
             return 1, 0, depth
+        argument = node.get("arg")
+        if isinstance(argument, Mapping):
+            regions, operations, child_depth = count(argument, depth + 1)
+            return regions, operations + 1, max(depth, child_depth)
         arguments = node.get("args")
         if not isinstance(arguments, list):
             return 0, 0, depth

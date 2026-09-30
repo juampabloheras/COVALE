@@ -1,5 +1,6 @@
 from covale.prompts.localization import (
     LOCALIZATION_PROMPT,
+    OVERLAP_PRECHECK_PROMPT,
     SIMILARITY_PROMPT,
 )
 from covale.prompts.onboarding import ATLAS_ONBOARDING_PROMPT
@@ -13,5 +14,6 @@ __all__ = [
     "COMPATIBILITY_PROMPT",
     "EXTRACTION_PROMPT",
     "LOCALIZATION_PROMPT",
+    "OVERLAP_PRECHECK_PROMPT",
     "SIMILARITY_PROMPT",
 ]

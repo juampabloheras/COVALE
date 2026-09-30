@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
     "pyyaml>=6.0.3",
+    "scipy>=1.17.1",
 ]
 
 [project.scripts]

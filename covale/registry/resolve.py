@@ -20,9 +20,9 @@ class RegistryResolver:
         *,
         client: OpenAIClient,
         model: str,
-        candidate_limit: int = 20,
+        candidate_limit: int | None = None,
     ) -> None:
-        if candidate_limit < 1:
+        if candidate_limit is not None and candidate_limit < 1:
             raise ValueError("candidate_limit must be at least 1.")
         self.registry = registry
         self.client = client
@@ -36,7 +36,7 @@ class RegistryResolver:
         *,
         client: OpenAIClient,
         model: str,
-        candidate_limit: int = 20,
+        candidate_limit: int | None = None,
     ) -> "RegistryResolver":
         try:
             model_registry = RegistryV2.model_validate(registry)
@@ -52,17 +52,20 @@ class RegistryResolver:
         )
 
     def resolve(self, query: str) -> dict[str, Any]:
+        candidate_limit = self.candidate_limit or len(
+            self.registry.model.regions
+        )
         matches = self.registry.search(
             query,
-            limit=self.candidate_limit,
+            limit=candidate_limit,
         )
         exact_ids = {match.region_id for match in matches if match.score == 1.0}
         if len(exact_ids) == 1:
             return {"op": "region", "id": exact_ids.pop()}
 
-        catalog = self.registry.compact_catalog(
+        catalog = self.registry.composition_catalog(
             query,
-            limit=self.candidate_limit,
+            limit=candidate_limit,
         )
         allowed_ids = {entry["id"] for entry in catalog}
         response = request_json(
@@ -108,6 +111,15 @@ class RegistryResolver:
                         f"catalog: {region_id}"
                     )
                 return {"op": "region", "id": region_id}
+            if "arg" in node:
+                return {
+                    **{
+                        key: value
+                        for key, value in node.items()
+                        if key != "arg"
+                    },
+                    "arg": normalize(node["arg"]),
+                }
             return {
                 "op": node["op"],
                 "args": [normalize(argument) for argument in node["args"]],

@@ -1,7 +1,12 @@
+import re
+import warnings
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
+
+import nibabel as nib
+import numpy as np
 
 from covale.evaluator.report_processing import (
     AnatomicalUnit,
@@ -10,6 +15,7 @@ from covale.evaluator.report_processing import (
 )
 from covale.localize import (
     DEFAULT_REGISTRY,
+    Expression,
     ExpressionBuilder,
     expression_stats,
     localize_with_expression,
@@ -21,12 +27,44 @@ from covale.localize.deep_agent import (
 )
 from covale.localize.llm import build_expression as llm_expression
 from covale.localize.openai_client import OpenAIClient, create_client
+from covale.localize.overlap import precheck_overlap
 from covale.localize.similarity import compare
+from covale.registry import AtlasMask, Registry
 from covale.evaluator.metrics import dice
 from covale.evaluator.report_processing.models import Alignment, UnitMatch
 
 CovaleMethod = Literal["llm", "deep_agent", "similarity"]
 DEFAULT_MODEL = "gpt-6-astra"
+LocalizationCacheKey = tuple[str, str, str, str]
+LocalizationCache = dict[
+    LocalizationCacheKey,
+    tuple[Expression, AtlasMask],
+]
+
+
+def _volume_name(value: str) -> str:
+    name = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+    return name or "region"
+
+
+def _volume_paths(
+    units: list[AnatomicalUnit],
+    output_dir: Path,
+    prefix: str,
+) -> dict[int, Path]:
+    counts: dict[str, int] = {}
+    paths = {}
+    for unit in units:
+        name = _volume_name(unit.anatomy)
+        counts[name] = counts.get(name, 0) + 1
+        suffix = f"_{counts[name]}" if counts[name] > 1 else ""
+        paths[id(unit)] = output_dir / f"{prefix}_{name}{suffix}.nii.gz"
+    return paths
+
+
+def _save_volume(mask: AtlasMask, path: Path, value: int) -> None:
+    data = np.where(mask.data, value, 0).astype(np.uint16)
+    nib.save(nib.Nifti1Image(data, mask.affine), str(path))
 
 
 def _evaluate_anatomy(
@@ -39,12 +77,16 @@ def _evaluate_anatomy(
     model: str,
     client: OpenAIClient | None,
     agent: DeepAgent | None,
+    localization_cache: LocalizationCache,
+    output_paths: tuple[Path, Path] | None,
 ) -> dict[str, Any]:
     started = perf_counter()
     if expression_builder is not None and method is not None:
         raise ValueError("Pass either expression_builder or method, not both.")
 
     builder = expression_builder
+    overlap_precheck = None
+    precheck_seconds = None
     if method == "similarity":
         score_started = perf_counter()
         score = compare(
@@ -66,6 +108,39 @@ def _evaluate_anatomy(
             },
         }
 
+    if method == "deep_agent":
+        precheck_started = perf_counter()
+        precheck = precheck_overlap(
+            reference,
+            candidate,
+            client=client,
+            model=model,
+        )
+        precheck_seconds = perf_counter() - precheck_started
+        overlap_precheck = precheck.model_dump(exclude_none=True)
+        if precheck.confidently_disjoint and precheck.confidence >= 0.9:
+            if output_paths is not None:
+                warnings.warn(
+                    "save_volumes was requested, but Deep Agent grounding "
+                    "was skipped because the regions were confidently "
+                    "disjoint; no volumes were written.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            return {
+                "reference": reference,
+                "candidate": candidate,
+                "method": method,
+                "score": 0.0,
+                "diagnostics": {
+                    "resolved": True,
+                    "grounding_skipped": True,
+                    "overlap_precheck": overlap_precheck,
+                    "language_seconds": precheck_seconds,
+                    "total_seconds": perf_counter() - started,
+                },
+            }
+
     if method == "llm":
         openai_client = client or create_client()
 
@@ -79,7 +154,10 @@ def _evaluate_anatomy(
 
         builder = build_with_llm
     elif method == "deep_agent":
-        deep_agent = agent or create_agent(model)
+        deep_agent = agent or create_agent(
+            model,
+            Registry.load(registry_path),
+        )
 
         def build_with_agent(
             text: str, registry: Mapping[str, Any]
@@ -95,16 +173,34 @@ def _evaluate_anatomy(
     elif method is not None:
         raise ValueError(f"Unknown COVALE method: {method}")
 
+    registry_key = str(Path(registry_path).resolve())
+    selected_method = method or "custom"
+
+    def localize_cached(text: str) -> tuple[Expression, AtlasMask]:
+        key = (registry_key, selected_method, model, text)
+        if key not in localization_cache:
+            localization_cache[key] = localize_with_expression(
+                text,
+                registry_path,
+                builder,
+            )
+        return localization_cache[key]
+
     reference_started = perf_counter()
-    reference_expression, reference_mask = localize_with_expression(
-        reference, registry_path, builder
-    )
+    reference_expression, reference_mask = localize_cached(reference)
     reference_seconds = perf_counter() - reference_started
     candidate_started = perf_counter()
-    candidate_expression, candidate_mask = localize_with_expression(
-        candidate, registry_path, builder
-    )
+    candidate_expression, candidate_mask = localize_cached(candidate)
     candidate_seconds = perf_counter() - candidate_started
+    saved_volumes = None
+    if output_paths is not None:
+        query_path, target_path = output_paths
+        _save_volume(reference_mask, query_path, 100)
+        _save_volume(candidate_mask, target_path, 200)
+        saved_volumes = {
+            "query": str(query_path.resolve()),
+            "target": str(target_path.resolve()),
+        }
     dice_started = perf_counter()
     score = dice(reference_mask.data, candidate_mask.data)
     dice_seconds = perf_counter() - dice_started
@@ -123,6 +219,16 @@ def _evaluate_anatomy(
             "total_seconds": perf_counter() - started,
             "reference_expression": expression_stats(reference_expression),
             "candidate_expression": expression_stats(candidate_expression),
+            **(
+                {
+                    "grounding_skipped": False,
+                    "overlap_precheck": overlap_precheck,
+                    "precheck_seconds": precheck_seconds,
+                }
+                if overlap_precheck
+                else {}
+            ),
+            **({"saved_volumes": saved_volumes} if saved_volumes else {}),
         },
     }
 
@@ -268,8 +374,18 @@ def evaluate(
     extract_findings: bool = False,
     client: OpenAIClient | None = None,
     agent: DeepAgent | None = None,
+    save_volumes: str | Path | None = None,
+    _localization_cache: LocalizationCache | None = None,
 ) -> dict[str, Any]:
     started = perf_counter()
+    if save_volumes is not None and method == "similarity":
+        warnings.warn(
+            "save_volumes is ignored for method='similarity' because "
+            "language-only similarity does not produce atlas masks.",
+            UserWarning,
+            stacklevel=2,
+        )
+        save_volumes = None
     if extract_findings:
         openai_client = client or create_client()
         client = openai_client
@@ -294,6 +410,20 @@ def evaluate(
         candidates = [AnatomicalUnit(text=candidate, anatomy=candidate)]
         compatible = {(0, 0)}
 
+    output_dir = Path(save_volumes) if save_volumes is not None else None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    query_paths = (
+        _volume_paths(references, output_dir, "query") if output_dir else {}
+    )
+    target_paths = (
+        _volume_paths(candidates, output_dir, "target") if output_dir else {}
+    )
+    localization_cache = (
+        _localization_cache
+        if _localization_cache is not None
+        else {}
+    )
     scored_pairs: dict[tuple[str, str], dict[str, Any]] = {}
 
     def score_pair(
@@ -301,7 +431,7 @@ def evaluate(
         candidate_unit: AnatomicalUnit,
     ) -> dict[str, Any]:
         key = (reference_unit.anatomy, candidate_unit.anatomy)
-        if key in scored_pairs:
+        if key in scored_pairs and output_dir is None:
             return scored_pairs[key]
         result = _evaluate_anatomy(
             reference_unit.anatomy,
@@ -312,6 +442,13 @@ def evaluate(
             model=model,
             client=client,
             agent=agent,
+            localization_cache=localization_cache,
+            output_paths=(
+                query_paths[id(reference_unit)],
+                target_paths[id(candidate_unit)],
+            )
+            if output_dir
+            else None,
         )
         scored_pairs[key] = result
         return result
@@ -357,6 +494,7 @@ def covale(
     extract_findings: bool = False,
     client: OpenAIClient | None = None,
     agent: DeepAgent | None = None,
+    save_volumes: str | Path | None = None,
 ) -> float:
     result = evaluate(
         reference,
@@ -367,6 +505,7 @@ def covale(
         extract_findings=extract_findings,
         client=client,
         agent=agent,
+        save_volumes=save_volumes,
     )
     return float(result["score"])
 
